@@ -51,29 +51,46 @@ JUGADORES_HOY = [
 ]
 
 CONEXIONES_REALES = [
+    # C. Ronaldo
     ("C. Ronaldo", "Benzema"), ("C. Ronaldo", "Modric"), ("C. Ronaldo", "Kroos"), 
     ("C. Ronaldo", "Sergio Ramos"), ("C. Ronaldo", "Casemiro"), ("C. Ronaldo", "Varane"), 
     ("C. Ronaldo", "Marcelo"), ("C. Ronaldo", "Di María"),
+    
+    # Benzema
     ("Benzema", "Modric"), ("Benzema", "Kroos"), ("Benzema", "Sergio Ramos"), 
     ("Benzema", "Casemiro"), ("Benzema", "Varane"), ("Benzema", "Marcelo"), 
-    ("Benzema", "Di María"), ("Benzema", "Mbappé"),
+    ("Benzema", "Di María"),
+    
+    # Modric
     ("Modric", "Kroos"), ("Modric", "Sergio Ramos"), ("Modric", "Casemiro"), 
     ("Modric", "Varane"), ("Modric", "Marcelo"), ("Modric", "Di María"),
+    
+    # Kroos
     ("Kroos", "Sergio Ramos"), ("Kroos", "Casemiro"), ("Kroos", "Varane"), 
     ("Kroos", "Marcelo"), ("Kroos", "Di María"),
+    
+    # Sergio Ramos
     ("Sergio Ramos", "Casemiro"), ("Sergio Ramos", "Varane"), ("Sergio Ramos", "Marcelo"), 
     ("Sergio Ramos", "Di María"), ("Sergio Ramos", "Messi"), ("Sergio Ramos", "Neymar"), 
     ("Sergio Ramos", "Mbappé"), ("Sergio Ramos", "Marquinhos"),
+    
+    # Casemiro / Varane / Marcelo
     ("Casemiro", "Varane"), ("Casemiro", "Marcelo"), ("Casemiro", "Di María"),
     ("Varane", "Marcelo"), ("Varane", "Di María"), ("Varane", "Mbappé"), 
     ("Marcelo", "Di María"),
+    
+    # Messi / Neymar / Mbappé / Bloque PSG-Barca
     ("Messi", "Neymar"), ("Messi", "Mbappé"), ("Messi", "Di María"), ("Messi", "Ibrahimovic"),
+    
     ("Neymar", "Mbappé"), ("Neymar", "Di María"), ("Neymar", "Marquinhos"), 
-    ("Neymar", "Thiago Silva"), ("Neymar", "Cavani"), ("Neymar", "Ibrahimovic"),
+    ("Neymar", "Thiago Silva"), ("Neymar", "Cavani"),
+    
     ("Mbappé", "Di María"), ("Mbappé", "Marquinhos"), ("Mbappé", "Thiago Silva"), 
     ("Mbappé", "Cavani"),
+    
     ("Di María", "Marquinhos"), ("Di María", "Thiago Silva"), ("Di María", "Cavani"), 
     ("Di María", "Ibrahimovic"),
+    
     ("Marquinhos", "Thiago Silva"), ("Marquinhos", "Cavani"),
     ("Thiago Silva", "Cavani"), ("Thiago Silva", "Ibrahimovic"),
     ("Ibrahimovic", "Cavani")
