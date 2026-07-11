@@ -131,33 +131,58 @@ def obtener_fecha_juego_actual():
         return ahora.date()
 
 def obtener_juego_del_dia(fecha_juego):
-    # Usamos la fecha del juego activo como semilla
     hoy_str = fecha_juego.strftime('%Y%m%d')
     semilla = int(hoy_str)
     
     pool_jugadores = list(JUGADORES_DB.keys())
-    random.seed(semilla)
-    jugadores_hoy = random.sample(pool_jugadores, 16)
     
+    # Intentamos emparejar dinámicamente. Si falla por callejón sin salida, 
+    # sumamos un intento a la semilla para cambiar el orden de mezcla y reintentar.
+    intentos = 0
+    while intentos < 100:
+        random.seed(semilla + intentos)
+        
+        jugadores_disponibles = list(pool_jugadores)
+        random.shuffle(jugadores_disponibles)
+        
+        parejas_seleccionadas = []
+        jugadores_seleccionados = set()
+        
+        for p1 in jugadores_disponibles:
+            if p1 in jugadores_seleccionados:
+                continue
+            
+            # Buscar un compañero válido que aún no esté seleccionado
+            posibles_companeros = [p for p in jugadores_disponibles if p != p1 and p not in jugadores_seleccionados]
+            # Barajamos los candidatos para que la pareja de p1 no sea siempre la misma
+            random.shuffle(posibles_companeros)
+            
+            for p2 in posibles_companeros:
+                if compartieron_club(JUGADORES_DB[p1], JUGADORES_DB[p2]):
+                    parejas_seleccionadas.append((p1, p2))
+                    jugadores_seleccionados.add(p1)
+                    jugadores_seleccionados.add(p2)
+                    break
+            
+            if len(parejas_seleccionadas) == 8:
+                break
+        
+        # Si logramos formar las 8 parejas perfectas, salimos del bucle principal
+        if len(parejas_seleccionadas) == 8:
+            break
+        intentos += 1
+        
+    jugadores_hoy = list(jugadores_seleccionados)
+    
+    # Calculamos todas las conexiones cruzadas alternativas posibles entre estos 16
     conexiones_hoy = []
     for i in range(len(jugadores_hoy)):
         for j in range(i + 1, len(jugadores_hoy)):
-            p1 = jugadores_hoy[i]
-            p2 = jugadores_hoy[j]
-            
-            c1 = JUGADORES_DB[p1]
-            c2 = JUGADORES_DB[p2]
-            
-            # Algoritmo de comparación
-            for club1, ent1, sal1 in c1:
-                for club2, ent2, sal2 in c2:
-                    if club1 == club2:
-                        in_comun = max(ent1, ent2)
-                        fin_comun = min(sal1, sal2)
-                        if in_comun <= fin_comun:
-                            conexiones_hoy.append((p1, p2))
-                            
-    # Eliminar duplicados si los hubiera
+            u1 = jugadores_hoy[i]
+            u2 = jugadores_hoy[j]
+            if compartieron_club(JUGADORES_DB[u1], JUGADORES_DB[u2]):
+                conexiones_hoy.append((u1, u2))
+                
     conexiones_hoy = list(set(conexiones_hoy))
     return jugadores_hoy, conexiones_hoy
 
