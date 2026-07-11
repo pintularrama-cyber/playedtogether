@@ -1,0 +1,175 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="space-y-4">
+    
+    <!-- Info del Juego y Cronómetro -->
+    <div class="bg-white p-4 rounded-lg shadow flex justify-between items-center">
+        <div>
+            <h2 class="font-bold text-gray-800 text-sm">PlayedTogether?</h2>
+            <p class="text-[11px] text-gray-500">Haz 8 parejas. Toca una pareja verde para deshacerla.</p>
+        </div>
+        <div class="text-right">
+            <span class="text-xs text-gray-500 block">Tiempo</span>
+            <span id="cronometro" class="text-2xl font-mono font-bold text-emerald-600">0s</span>
+        </div>
+    </div>
+
+    <!-- Cuadrícula 4x4 -->
+    <div class="grid grid-cols-4 gap-2 bg-gray-200 p-2 rounded-lg">
+        {% for jugador in jugadores %}
+            <button class="carta bg-white text-gray-800 text-xs font-bold py-4 px-1 rounded shadow h-20 flex items-center justify-center text-center break-words transition active:scale-95 duration-100 cursor-pointer"
+                    onclick="seleccionarCarta(this)" 
+                    data-nombre="{{ jugador }}">
+                {{ jugador }}
+            </button>
+        {% endfor %}
+    </div>
+
+    <!-- Botón de Reiniciar -->
+    <div class="text-center">
+        <button onclick="reiniciarTablero()" class="w-full bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-3 px-2 rounded-lg shadow">
+            Reiniciar tablero 🔄
+        </button>
+    </div>
+
+</div>
+
+<script>
+    const conexionesPermitidas = {{ conexiones | tojson }};
+    
+    let cartaSeleccionada = null;
+    let parejasCompletadas = 0;
+    let segundos = 0;
+    let intervaloCronometro;
+
+    function iniciarCronometro() {
+        clearInterval(intervaloCronometro);
+        segundos = 0;
+        document.getElementById('cronometro').innerText = "0s";
+        intervaloCronometro = setInterval(() => {
+            segundos++;
+            document.getElementById('cronometro').innerText = segundos + "s";
+        }, 1000);
+    }
+
+    iniciarCronometro();
+
+    function seleccionarCarta(boton) {
+        
+        // CASO 1: Si el usuario pulsa sobre una carta que ya está en VERDE (completada)
+        if (boton.hasAttribute('data-pair-id')) {
+            const idPareja = boton.getAttribute('data-pair-id');
+            
+            // Buscamos los dos botones que comparten esta misma ID de pareja
+            const cartasDeLaPareja = document.querySelectorAll(`[data-pair-id="${idPareja}"]`);
+            
+            // Los restauramos a su estado original blanco y activo
+            cartasDeLaPareja.forEach(btn => {
+                btn.classList.remove('bg-green-500', 'text-white');
+                btn.classList.add('bg-white', 'text-gray-800');
+                btn.removeAttribute('data-pair-id');
+            });
+            
+            parejasCompletadas--;
+            
+            // Si había otra carta blanca seleccionada a medias, la limpiamos para evitar fallos
+            if (cartaSeleccionada) {
+                cartaSeleccionada.classList.remove('bg-blue-200');
+                cartaSeleccionada.classList.add('bg-white');
+                cartaSeleccionada = null;
+            }
+            return; // Salimos de la función
+        }
+
+        // CASO 2: Lógica normal de selección para cartas blancas
+        boton.classList.remove('bg-white');
+        boton.classList.add('bg-blue-200');
+
+        if (!cartaSeleccionada) {
+            cartaSeleccionada = boton;
+        } else {
+            const nombre1 = cartaSeleccionada.getAttribute('data-nombre');
+            const nombre2 = boton.getAttribute('data-nombre');
+
+            if (sonPareja(nombre1, nombre2)) {
+                marcarCorrectas(cartaSeleccionada, boton);
+                parejasCompletadas++;
+                
+                if (parejasCompletadas === 8) {
+                    finalizarJuego();
+                }
+            } else {
+                marcarIncorrectas(cartaSeleccionada, boton);
+            }
+            cartaSeleccionada = null;
+        }
+    }
+
+    function sonPareja(n1, n2) {
+        return conexionesPermitidas.some(pair => 
+            (pair[0] === n1 && pair[1] === n2) || (pair[0] === n2 && pair[1] === n1)
+        );
+    }
+
+    // Al emparejar con éxito, generamos una ID única de pareja
+    function marcarCorrectas(btn1, btn2) {
+        const idParejaUnique = 'pareja-' + Math.random().toString(36).substr(2, 9);
+        
+        [btn1, btn2].forEach(btn => {
+            btn.classList.remove('bg-blue-200', 'bg-white');
+            btn.classList.add('bg-green-500', 'text-white');
+            btn.setAttribute('data-pair-id', idParejaUnique);
+            // IMPORTANTE: Ya no usamos btn.disabled = true para permitir que detecten el clic para deshacerse
+        });
+    }
+
+    function marcarIncorrectas(btn1, btn2) {
+        [btn1, btn2].forEach(btn => {
+            btn.classList.remove('bg-blue-200');
+            btn.classList.add('bg-red-500', 'text-white');
+        });
+        
+        setTimeout(() => {
+            [btn1, btn2].forEach(btn => {
+                btn.classList.remove('bg-red-500', 'text-white');
+                btn.classList.add('bg-white');
+            });
+        }, 500);
+    }
+
+    function reiniciarTablero() {
+        const cartas = document.querySelectorAll('.carta');
+        cartas.forEach(btn => {
+            btn.classList.remove('bg-green-500', 'text-white', 'bg-blue-200', 'bg-red-500');
+            btn.classList.add('bg-white');
+            btn.removeAttribute('data-pair-id');
+        });
+        cartaSeleccionada = null;
+        parejasCompletadas = 0;
+        iniciarCronometro();
+    }
+
+    function finalizarJuego() {
+        clearInterval(intervaloCronometro);
+        
+        fetch('/guardar_puntuacion', {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+                segundos: segundos,
+                completado: true
+            })
+        })
+        .then(response => response.json())
+        .then(data => {
+            window.location.href = "{{ url_for('index') }}";
+        })
+        .catch((error) => {
+            console.error('Error:', error);
+            alert("Error de conexión al guardar puntuación.");
+        });
+    }
+</script>
+{% endblock %}
