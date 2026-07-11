@@ -7,7 +7,11 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'mi_clave_secreta_super_segura'
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///playedtogether.db'
+# Si estamos en Render con disco persistente, usamos la ruta /data, si no, ruta local
+if os.path.exists('/data'):
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////data/playedtogether.db'
+else:
+    app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///playedtogether.db'
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
