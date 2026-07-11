@@ -35,7 +35,6 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     puntos_temporada = db.Column(db.Integer, default=0)
-    # NUEVO: Guardamos la fecha del último tablero que completó el usuario
     ultimo_juego_fecha = db.Column(db.Date, nullable=True)
     grupo_id = db.Column(db.Integer, db.ForeignKey('grupo.id'), nullable=True)
 
@@ -99,16 +98,22 @@ JUGADORES_DB = {
     "Henry": [("Monaco", 1994, 1999), ("Juventus", 1999, 1999), ("Arsenal", 1999, 2007), ("Barcelona", 2007, 2010)],
     "Ronaldinho": [("PSG", 2001, 2003), ("Barcelona", 2003, 2008), ("Milan", 2008, 2011)],
     "Eto'o": [("Real Madrid", 1997, 2000), ("Mallorca", 2000, 2004), ("Barcelona", 2004, 2009), ("Inter", 2009, 2011), ("Chelsea", 2013, 2014), ("Everton", 2014, 2015)],
+
+    # --- NUEVOS: ATLÉTICO DE MADRID ---
     "Griezmann": [("Real Sociedad", 2009, 2014), ("Atletico", 2014, 2019), ("Barcelona", 2019, 2021), ("Atletico", 2021, 2026)],
     "Falcao": [("Porto", 2009, 2011), ("Atletico", 2011, 2013), ("Monaco", 2013, 2019), ("Manchester United", 2014, 2015), ("Chelsea", 2015, 2016)],
     "Godín": [("Villarreal", 2007, 2010), ("Atletico", 2010, 2019), ("Inter", 2019, 2020)],
     "Oblak": [("Benfica", 2010, 2014), ("Atletico", 2014, 2026)],
     "Diego Costa": [("Atletico", 2010, 2014), ("Chelsea", 2014, 2017), ("Atletico", 2018, 2020)],
+
+    # --- NUEVOS: REAL BETIS ---
     "Joaquín": [("Real Betis", 2000, 2006), ("Valencia", 2006, 2011), ("Malaga", 2011, 2013), ("Fiorentina", 2013, 2015), ("Real Betis", 2015, 2023)],
     "Fekir": [("Lyon", 2013, 2019), ("Real Betis", 2019, 2024)],
     "Canales": [("Real Madrid", 2010, 2012), ("Valencia", 2011, 2014), ("Real Sociedad", 2014, 2018), ("Real Betis", 2018, 2023)],
     "Isco": [("Valencia", 2010, 2011), ("Malaga", 2011, 2013), ("Real Madrid", 2013, 2022), ("Sevilla", 2022, 2022), ("Real Betis", 2023, 2026)],
     "Bellerín": [("Arsenal", 2013, 2022), ("Real Betis", 2021, 2022), ("Barcelona", 2022, 2023), ("Real Betis", 2023, 2026)],
+
+    # --- NUEVOS: SEVILLA FC ---
     "Jesús Navas": [("Sevilla", 2003, 2013), ("Manchester City", 2013, 2017), ("Sevilla", 2017, 2026)],
     "Rakitic": [("Schalke", 2007, 2011), ("Sevilla", 2011, 2014), ("Barcelona", 2014, 2020), ("Sevilla", 2020, 2024)],
     "Banega": [("Valencia", 2008, 2014), ("Atletico", 2008, 2009), ("Sevilla", 2014, 2016), ("Inter", 2016, 2017), ("Sevilla", 2017, 2020)],
@@ -231,6 +236,15 @@ def jugar():
         flash("Ya has participado en el reto activo. ¡Vuelve cuando se abra el siguiente!", "error")
         return redirect(url_for('index'))
 
+    # Carga de la partida utilizando la fecha activa
+    jugadores_hoy, conexiones_hoy = obtener_juego_del_dia(fecha_activa)
+
+    random.seed()
+    jugadores_mezclados = list(jugadores_hoy)
+    random.shuffle(jugadores_mezclados)
+
+    return render_template('jugar.html', jugadores=jugadores_mezclados, conexiones=conexiones_hoy)
+
 def compartieron_club(carrera1, carrera2):
     for club1, entrada1, salida1 in carrera1:
         for club2, entrada2, salida2 in carrera2:
@@ -241,16 +255,6 @@ def compartieron_club(carrera1, carrera2):
                 if inicio_comun <= fin_comun:
                     return True
     return False
-
-
-    # Carga de la partida utilizando la fecha activa (que puede ser ayer si es antes de las 11 y no ha jugado)
-    jugadores_hoy, conexiones_hoy = obtener_juego_del_dia(fecha_activa)
-
-    random.seed()
-    jugadores_mezclados = list(jugadores_hoy)
-    random.shuffle(jugadores_mezclados)
-
-    return render_template('jugar.html', jugadores=jugadores_mezclados, conexiones=conexiones_hoy)
 
 
 @app.route('/guardar_puntuacion', methods=['POST'])
