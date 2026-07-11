@@ -231,6 +231,18 @@ def jugar():
         flash("Ya has participado en el reto activo. ¡Vuelve cuando se abra el siguiente!", "error")
         return redirect(url_for('index'))
 
+def compartieron_club(carrera1, carrera2):
+    for club1, entrada1, salida1 in carrera1:
+        for club2, entrada2, salida2 in carrera2:
+            if club1 == club2:
+                # Comprobar solapamiento de años en el mismo club
+                inicio_comun = max(entrada1, entrada2)
+                fin_comun = min(salida1, salida2)
+                if inicio_comun <= fin_comun:
+                    return True
+    return False
+
+
     # Carga de la partida utilizando la fecha activa (que puede ser ayer si es antes de las 11 y no ha jugado)
     jugadores_hoy, conexiones_hoy = obtener_juego_del_dia(fecha_activa)
 
