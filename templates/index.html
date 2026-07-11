@@ -2,15 +2,15 @@
 {% block content %}
 <div class="space-y-6">
 
-    <!-- Tarjeta de Bienvenida y Botón de Juego -->
+    <!-- Tarjeta de Bienvenida -->
     <div class="bg-white p-6 rounded-lg shadow-md text-center">
         <h2 class="text-lg font-semibold text-gray-700">Hola, <span class="text-emerald-600 font-bold">{{ current_user.username }}</span></h2>
-        <p class="text-xs text-gray-500 mt-1">Grupo: <span class="font-bold text-gray-700">{{ nombre_grupo }}</span></p>
+        <p class="text-xs text-gray-500 mt-1">Perfil: <span class="font-bold text-gray-700">{{ nombre_grupo }}</span></p>
         
         {% if current_user.username != 'admin' %}
             
             {% if bloqueado_hora %}
-                <!-- CASO A: EL JUEGO ESTÁ BLOQUEADO POR HORARIO (MOSTRAR CRONÓMETRO) -->
+                <!-- EL JUEGO ESTÁ BLOQUEADO POR HORARIO (CRONÓMETRO) -->
                 <div class="mt-4 p-4 bg-gray-50 rounded-lg border border-gray-200">
                     <span class="text-xs text-gray-500 block uppercase font-bold tracking-wider">Siguiente reto en:</span>
                     <span id="cronometro-espera" class="text-2xl font-mono font-bold text-amber-600 block mt-1">--h --m --s</span>
@@ -20,7 +20,7 @@
                 </div>
 
             {% elif current_user.jugado_hoy %}
-                <!-- CASO B: YA JUGÓ HOY -->
+                <!-- YA JUGÓ HOY -->
                 <div class="space-y-2 mt-4">
                     <button class="w-full bg-gray-400 text-white font-bold py-3 rounded-lg cursor-not-allowed" disabled>
                         Ya has jugado hoy 🔒
@@ -29,8 +29,8 @@
                 </div>
 
             {% else %}
-                <!-- CASO C: DISPONIBLE PARA JUGAR -->
-                <a href="{{ url_for('jugar') }}" class="block text-center mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow transition duration-200 animate-pulse">
+                <!-- DISPONIBLE PARA JUGAR -->
+                <a href="{{ url_for('jugar') }}" class="block text-center mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow transition duration-200">
                     ¡Jugar Reto de Hoy! ⚽
                 </a>
             {% endif %}
@@ -38,7 +38,7 @@
         {% endif %}
     </div>
 
-    <!-- Tabla de Clasificación del Grupo -->
+    <!-- TABLA DE CLASIFICACIÓN (Para usuarios normales) -->
     {% if current_user.username != 'admin' %}
     <div class="bg-white p-6 rounded-lg shadow-md">
         <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -62,6 +62,34 @@
 
     <!-- PANEL EXCLUSIVO PARA EL ADMINISTRADOR -->
     {% if current_user.username == 'admin' %}
+        
+        <!-- GESTIÓN DE USUARIOS (ELIMINAR) -->
+        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
+            <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
+                👥 Gestión de Usuarios Registrados
+            </h3>
+            <div class="divide-y divide-gray-200 max-h-72 overflow-y-auto">
+                {% for usuario in usuarios %}
+                    <div class="py-3 flex justify-between items-center">
+                        <div>
+                            <span class="font-semibold text-gray-800 text-sm block">{{ usuario.username }}</span>
+                            <span class="text-[11px] text-gray-500">
+                                Grupo: <strong class="text-gray-700">{{ usuario.grupo.nombre if usuario.grupo else 'Ninguno' }}</strong> | {{ usuario.puntos_temporada }} pts
+                            </span>
+                        </div>
+                        <form action="{{ url_for('borrar_usuario', user_id=usuario.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas eliminar al usuario {{ usuario.username }}?');" style="margin: 0;">
+                            <button type="submit" class="bg-red-100 hover:bg-red-200 text-red-600 text-xs font-bold py-1.5 px-3 rounded-lg transition duration-150">
+                                Eliminar 🗑️
+                            </button>
+                        </form>
+                    </div>
+                {% else %}
+                    <p class="text-xs text-gray-500 text-center py-4">No hay otros usuarios registrados en el sistema todavía.</p>
+                {% endfor %}
+            </div>
+        </div>
+
+        <!-- CREAR NUEVO GRUPO -->
         <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 space-y-4">
             <h3 class="text-lg font-bold text-gray-800">⚙️ Crear un Nuevo Grupo</h3>
             <form action="{{ url_for('crear_grupo') }}" method="POST" class="space-y-3">
@@ -72,6 +100,7 @@
             </form>
         </div>
 
+        <!-- ZONA PELIGROSA -->
         <div class="bg-red-50 p-6 rounded-lg shadow-md border border-red-200">
             <h3 class="text-lg font-bold text-red-800 mb-2">⚠️ Zona Peligrosa</h3>
             <p class="text-xs text-red-600 mb-4">Esta acción reseteará las puntuaciones de todos los jugadores de todos los grupos.</p>
@@ -90,26 +119,21 @@
 <script>
     function actualizarCronometro() {
         const ahora = new Date();
-        
-        // Creamos la fecha objetivo: Hoy a las 11:00:00 AM
         const destino = new Date();
         destino.setHours(11, 0, 0, 0);
         
         const diferencia = destino - ahora;
         
         if (diferencia <= 0) {
-            // Si el tiempo ya llegó a 0, recargamos la página para activar el botón de jugar
             clearInterval(intervalo);
             window.location.reload();
             return;
         }
         
-        // Conversión matemática a Horas, Minutos y Segundos
         const horas = Math.floor(diferencia / (1000 * 60 * 60));
         const minutos = Math.floor((diferencia % (1000 * 60 * 60)) / (1000 * 60));
         const segundos = Math.floor((diferencia % (1000 * 60)) / 1000);
         
-        // Formateo visual (añadir ceros a la izquierda si son menores de 10)
         const hDisplay = horas.toString().padStart(2, '0');
         const mDisplay = minutos.toString().padStart(2, '0');
         const sDisplay = segundos.toString().padStart(2, '0');
@@ -117,7 +141,6 @@
         document.getElementById('cronometro-espera').innerText = `${hDisplay}h ${mDisplay}m ${sDisplay}s`;
     }
     
-    // Ejecutar inmediatamente al cargar y luego cada 1 segundo
     actualizarCronometro();
     const intervalo = setInterval(actualizarCronometro, 1000);
 </script>

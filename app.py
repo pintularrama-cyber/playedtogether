@@ -171,14 +171,18 @@ def obtener_juego_del_dia():
 @app.route('/')
 @login_required
 def index():
-    if current_user.grupo_id:
+    if current_user.username == 'admin':
+        # El administrador ve a todos los usuarios ordenados por nombre
+        usuarios = User.query.filter(User.username != 'admin').order_by(User.username.asc()).all()
+        nombre_grupo = "Administración"
+    elif current_user.grupo_id:
+        # Los usuarios normales ven la clasificación de su propio grupo
         usuarios = User.query.filter_by(grupo_id=current_user.grupo_id).filter(User.username != 'admin').order_by(User.puntos_temporada.desc()).all()
         nombre_grupo = current_user.grupo.nombre
     else:
         usuarios = []
-        nombre_grupo = "Administración (Sin grupo)"
+        nombre_grupo = "Sin grupo"
     
-    # Comprobamos si el juego está bloqueado por horario
     bloqueado_hora = es_antes_de_las_11()
     
     return render_template('index.html', usuarios=usuarios, nombre_grupo=nombre_grupo, bloqueado_hora=bloqueado_hora)
@@ -244,6 +248,30 @@ def crear_grupo():
             db.session.add(nuevo_grupo)
             db.session.commit()
             flash(f"Grupo '{nombre_nuevo}' creado correctamente.", "success")
+    return redirect(url_for('index'))
+
+# --- ADMIN: ELIMINAR USUARIO ---
+@app.route('/borrar_usuario/<int:user_id>', methods=['POST'])
+@login_required
+def borrar_usuario(user_id):
+    if current_user.username != 'admin':
+        flash("No tienes permisos de administrador.", "error")
+        return redirect(url_for('index'))
+    
+    usuario = User.query.get(user_id)
+    if usuario:
+        # Evitar que el admin borre su propia cuenta accidentalmente
+        if usuario.username == 'admin':
+            flash("No puedes eliminar la cuenta de administrador.", "error")
+            return redirect(url_for('index'))
+        
+        nombre_eliminado = usuario.username
+        db.session.delete(usuario)
+        db.session.commit()
+        flash(f"El usuario '{nombre_eliminado}' ha sido eliminado con éxito.", "success")
+    else:
+        flash("Usuario no encontrado.", "error")
+        
     return redirect(url_for('index'))
 
 
