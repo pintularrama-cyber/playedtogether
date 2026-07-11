@@ -5,55 +5,66 @@
     <!-- Tarjeta de Bienvenida y Botón de Juego -->
     <div class="bg-white p-6 rounded-lg shadow-md text-center">
         <h2 class="text-lg font-semibold text-gray-700">Hola, <span class="text-emerald-600 font-bold">{{ current_user.username }}</span></h2>
-        <p class="text-xs text-gray-500 mt-1">El reto de hoy se activa a las 11:00 AM</p>
+        <p class="text-xs text-gray-500 mt-1">Grupo: <span class="font-bold text-gray-700">{{ nombre_grupo }}</span></p>
         
-        {% if current_user.jugado_hoy %}
-            <div class="space-y-2">
-                <button class="w-full bg-gray-400 text-white font-bold py-3 rounded-lg cursor-not-allowed" disabled>
-                    Ya has jugado hoy 🔒
-                </button>
-                <a href="{{ url_for('reset_hoy') }}" class="text-xs text-red-500 block hover:underline">Reiniciar estado para pruebas 🔄</a>
-            </div>
-        {% else %}
-            <a href="{{ url_for('jugar') }}" class="block text-center mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow transition duration-200">
-                ¡Jugar Reto de Hoy! ⚽
-            </a>
+        {% if current_user.username != 'admin' %}
+            {% if current_user.jugado_hoy %}
+                <div class="space-y-2 mt-4">
+                    <button class="w-full bg-gray-400 text-white font-bold py-3 rounded-lg cursor-not-allowed" disabled>
+                        Ya has jugado hoy 🔒
+                    </button>
+                    <a href="{{ url_for('reset_hoy') }}" class="text-xs text-red-500 block hover:underline">Reiniciar estado para pruebas 🔄</a>
+                </div>
+            {% else %}
+                <a href="{{ url_for('jugar') }}" class="block text-center mt-4 w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow transition duration-200">
+                    ¡Jugar Reto de Hoy! ⚽
+                </a>
+            {% endif %}
         {% endif %}
     </div>
 
-    <!-- Tabla de Clasificación -->
+    <!-- Tabla de Clasificación del Grupo -->
+    {% if current_user.username != 'admin' %}
     <div class="bg-white p-6 rounded-lg shadow-md">
         <h3 class="text-xl font-bold text-gray-800 mb-4 flex items-center gap-2">
-            🏆 Clasificación de la Temporada
+            🏆 Clasificación: {{ nombre_grupo }}
         </h3>
         <div class="divide-y divide-gray-200">
             {% for usuario in usuarios %}
                 <div class="py-3 flex justify-between items-center">
                     <div class="flex items-center gap-3">
                         <span class="font-bold text-gray-500 text-sm">#{{ loop.index }}</span>
-                        <span class="font-semibold text-gray-800">
-                            {{ usuario.username }}
-                            {% if usuario.username == 'admin' %}
-                                <span class="text-[10px] bg-red-100 text-red-600 px-2 py-0.5 rounded-full font-bold">Admin</span>
-                            {% endif %}
-                        </span>
+                        <span class="font-semibold text-gray-800">{{ usuario.username }}</span>
                     </div>
                     <span class="font-bold text-emerald-600">{{ usuario.puntos_temporada }} pts</span>
                 </div>
+            {% else %}
+                <p class="text-xs text-gray-500 text-center py-4">No hay jugadores registrados en este grupo todavía.</p>
             {% endfor %}
         </div>
     </div>
+    {% endif %}
 
     <!-- PANEL EXCLUSIVO PARA EL ADMINISTRADOR -->
     {% if current_user.username == 'admin' %}
+        <!-- CREAR NUEVO GRUPO -->
+        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 space-y-4">
+            <h3 class="text-lg font-bold text-gray-800">⚙️ Crear un Nuevo Grupo</h3>
+            <form action="{{ url_for('crear_grupo') }}" method="POST" class="space-y-3">
+                <input type="text" name="nombre_grupo" placeholder="Nombre del grupo (ej. Rotonda)" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
+                <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg shadow transition duration-200">
+                    Crear Grupo ➕
+                </button>
+            </form>
+        </div>
+
+        <!-- REINICIAR CLASIFICACIÓN GENERAL -->
         <div class="bg-red-50 p-6 rounded-lg shadow-md border border-red-200">
-            <h3 class="text-lg font-bold text-red-800 mb-2">⚙️ Panel de Administración</h3>
-            <p class="text-xs text-red-600 mb-4">Esta sección solo es visible para ti. Permite resetear la temporada de tus amigos.</p>
-            
-            <!-- Formulario con mensaje de confirmación nativo del navegador -->
-            <form action="{{ url_for('reset_clasificacion') }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas reiniciar la clasificación a 0 para todos los usuarios? Esto no se puede deshacer.');">
-                <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-3 px-4 rounded-lg shadow transition duration-200">
-                    Reiniciar Temporada ⚠️
+            <h3 class="text-lg font-bold text-red-800 mb-2">⚠️ Zona Peligrosa</h3>
+            <p class="text-xs text-red-600 mb-4">Esta acción reseteará las puntuaciones de todos los jugadores de todos los grupos.</p>
+            <form action="{{ url_for('reset_clasificacion') }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas reiniciar la clasificación general? Esto no se puede deshacer.');">
+                <button type="submit" class="w-full bg-red-600 hover:bg-red-700 text-white font-bold py-2 px-4 rounded-lg shadow transition duration-200">
+                    Reiniciar Temporada General ⚠️
                 </button>
             </form>
         </div>

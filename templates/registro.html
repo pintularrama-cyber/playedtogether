@@ -8,17 +8,28 @@
             <label class="block text-gray-700 text-sm font-semibold mb-2">Nombre de Usuario</label>
             <input type="text" name="username" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
         </div>
-        <div class="mb-6">
+        <div class="mb-4">
             <label class="block text-gray-700 text-sm font-semibold mb-2">Contraseña</label>
             <input type="password" name="password" class="w-full p-2 border rounded-lg focus:outline-none focus:ring-2 focus:ring-emerald-500" required>
         </div>
-        <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 rounded-lg transition duration-200">
+        
+        <!-- MENU DESPLEGABLE DE GRUPOS -->
+        <div class="mb-6">
+            <label class="block text-gray-700 text-sm font-semibold mb-2">Selecciona tu Grupo</label>
+            <select name="grupo_id" class="w-full p-2 border rounded-lg focus:outline-none bg-white focus:ring-2 focus:ring-emerald-500" required>
+                {% for grupo in grupos %}
+                    <option value="{{ grupo.id }}">{{ grupo.nombre }}</option>
+                {% endfor %}
+            </select>
+        </div>
+        
+        <button type="submit" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-2 rounded-lg transition duration-200">
             Registrarse
         </button>
     </form>
     
     <div class="mt-6 text-center text-sm text-gray-600">
-        ¿Ya tienes cuenta? <a href="{{ url_for('login') }}" class="text-blue-600 font-semibold hover:underline">Inicia sesión</a>
+        ¿Ya tienes cuenta? <a href="{{ url_for('login') }}" class="text-emerald-600 font-semibold hover:underline">Inicia sesión</a>
     </div>
 </div>
 {% endblock %}

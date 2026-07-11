@@ -7,16 +7,26 @@ from werkzeug.security import generate_password_hash, check_password_hash
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'mi_clave_secreta_super_segura'
-# Si estamos en Render con disco persistente, usamos la ruta /data, si no, ruta local
+
 if os.path.exists('/data'):
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:////data/playedtogether.db'
 else:
     app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///playedtogether.db'
+
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 login_manager = LoginManager(app)
 login_manager.login_view = 'login'
+
+
+# --- MODELOS DE LA BASE DE DATOS ---
+
+class Grupo(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    nombre = db.Column(db.String(50), unique=True, nullable=False)
+    # Relación uno a muchos: Un grupo tiene muchos usuarios
+    usuarios = db.relationship('User', backref='grupo', lazy=True)
 
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
@@ -24,6 +34,8 @@ class User(UserMixin, db.Model):
     password_hash = db.Column(db.String(128), nullable=False)
     puntos_temporada = db.Column(db.Integer, default=0)
     jugado_hoy = db.Column(db.Boolean, default=False)
+    # Relación: Grupo al que pertenece el usuario (puede ser Null para el admin)
+    grupo_id = db.Column(db.Integer, db.ForeignKey('grupo.id'), nullable=True)
 
 @login_manager.user_loader
 def load_user(user_id):
@@ -68,12 +80,21 @@ CONEXIONES_REALES = [
 ]
 
 
+# --- RUTAS ---
+
 @app.route('/')
 @login_required
 def index():
-    # Filtramos para excluir al administrador de la clasificación
-    usuarios = User.query.filter(User.username != 'admin').order_by(User.puntos_temporada.desc()).all()
-    return render_template('index.html', usuarios=usuarios)
+    # Si el usuario logueado tiene un grupo asignado, filtramos por su grupo
+    if current_user.grupo_id:
+        usuarios = User.query.filter_by(grupo_id=current_user.grupo_id).filter(User.username != 'admin').order_by(User.puntos_temporada.desc()).all()
+        nombre_grupo = current_user.grupo.nombre
+    else:
+        # Si es el admin (que no tiene grupo), de momento mostramos una lista vacía o general
+        usuarios = []
+        nombre_grupo = "Administración (Sin grupo)"
+        
+    return render_template('index.html', usuarios=usuarios, nombre_grupo=nombre_grupo)
 
 
 @app.route('/jugar')
@@ -112,27 +133,48 @@ def guardar_puntuacion():
     return jsonify({"status": "error", "message": "Datos inválidos"}), 400
 
 
-# --- NUEVA RUTA: REINICIAR CLASIFICACIÓN (SOLO ADMIN) ---
-@app.route('/reset_clasificacion', methods=['POST'])
+# --- ADMIN: CREAR NUEVOS GRUPOS ---
+@app.route('/crear_grupo', methods=['POST'])
 @login_required
-def reset_clasificacion():
-    # Comprobar si el usuario actual es estrictamente "admin"
+def crear_grupo():
     if current_user.username != 'admin':
-        flash("No tienes permisos de administrador para realizar esta acción.", "error")
+        flash("No tienes permisos de administrador.", "error")
         return redirect(url_for('index'))
     
-    # Poner a 0 los puntos de todos los usuarios
-    usuarios = User.query.all()
-    for usuario in usuarios:
-        usuario.puntos_temporada = 0
-        usuario.jugado_hoy = False  # Opcional: permite volver a jugar hoy al iniciar nueva temporada
-        
-    db.session.commit()
-    flash("¡La clasificación de la temporada ha sido reiniciada a 0!", "success")
+    nombre_nuevo = request.form.get('nombre_grupo').strip()
+    if nombre_nuevo:
+        existe = Grupo.query.filter_by(nombre=nombre_nuevo).first()
+        if existe:
+            flash("Ese grupo ya existe.", "error")
+        else:
+            nuevo_grupo = Grupo(nombre=nombre_nuevo)
+            db.session.add(nuevo_grupo)
+            db.session.commit()
+            flash(f"Grupo '{nombre_nuevo}' creado correctamente.", "success")
+            
     return redirect(url_for('index'))
 
 
-# RUTAS DE LOGIN Y REGISTRO
+# --- ADMIN: RESETEAR CLASIFICACIÓN DEL GRUPO ACTUAL ---
+@app.route('/reset_clasificacion', methods=['POST'])
+@login_required
+def reset_clasificacion():
+    if current_user.username != 'admin':
+        flash("No tienes permisos de administrador.", "error")
+        return redirect(url_for('index'))
+    
+    # El administrador resetea todos los usuarios de la base de datos
+    usuarios = User.query.all()
+    for usuario in usuarios:
+        usuario.puntos_temporada = 0
+        usuario.jugado_hoy = False
+        
+    db.session.commit()
+    flash("La clasificación general ha sido reiniciada a 0.", "success")
+    return redirect(url_for('index'))
+
+
+# --- INICIO DE SESIÓN ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -145,13 +187,18 @@ def login():
         flash('Usuario o contraseña incorrectos', 'error')
     return render_template('login.html')
 
+
+# --- REGISTRO DE USUARIOS CON GRUPO ---
 @app.route('/registro', methods=['GET', 'POST'])
 def registro():
+    # Obtenemos todos los grupos disponibles para mostrarlos en el desplegable
+    grupos_disponibles = Grupo.query.all()
+
     if request.method == 'POST':
         username = request.form.get('username').strip()
         password = request.form.get('password')
+        grupo_id = request.form.get('grupo_id')
         
-        # Bloquear el registro si alguien intenta registrarse con el nombre "admin" manualmente
         if username.lower() == 'admin':
             flash('No puedes registrar un usuario con ese nombre.', 'error')
             return redirect(url_for('registro'))
@@ -165,12 +212,18 @@ def registro():
             flash('Este usuario ya existe.', 'error')
             return redirect(url_for('registro'))
         
-        nuevo_usuario = User(username=username, password_hash=generate_password_hash(password))
+        nuevo_usuario = User(
+            username=username, 
+            password_hash=generate_password_hash(password),
+            grupo_id=grupo_id
+        )
         db.session.add(nuevo_usuario)
         db.session.commit()
-        flash('Registro completado.', 'success')
+        flash('Registro completado con éxito.', 'success')
         return redirect(url_for('login'))
-    return render_template('registro.html')
+        
+    return render_template('registro.html', grupos=grupos_disponibles)
+
 
 @app.route('/logout')
 @login_required
@@ -187,14 +240,20 @@ def reset_hoy():
     return redirect(url_for('index'))
 
 
-# --- INICIALIZACIÓN DE LA BASE DE DATOS Y USUARIO ADMIN ---
+# --- INICIALIZACIÓN DE TABLAS, ADMIN Y GRUPO "ROTONDA" ---
 with app.app_context():
     db.create_all()
     
-    # Comprobar si el administrador ya existe en la base de datos
+    # 1. Crear el grupo "Rotonda" automáticamente si no existe
+    rotonda_existe = Grupo.query.filter_by(nombre='Rotonda').first()
+    if not rotonda_existe:
+        rotonda_inicial = Grupo(nombre='Rotonda')
+        db.session.add(rotonda_inicial)
+        db.session.commit()
+    
+    # 2. Crear el administrador por defecto si no existe
     admin_existe = User.query.filter_by(username='admin').first()
     if not admin_existe:
-        # Si no existe, creamos el usuario "admin" con contraseña "admin"
         pass_encriptada = generate_password_hash('admin')
         nuevo_admin = User(username='admin', password_hash=pass_encriptada)
         db.session.add(nuevo_admin)
