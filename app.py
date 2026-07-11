@@ -1,19 +1,12 @@
 import os
 import random
 import datetime
-from datetime import time  # <-- NUEVA IMPORTACIÓN
-from zoneinfo import ZoneInfo  # <-- NUEVA IMPORTACIÓN
+from datetime import time
+from zoneinfo import ZoneInfo
 from flask import Flask, render_template, redirect, url_for, request, flash, jsonify
 from flask_sqlalchemy import SQLAlchemy
 from flask_login import LoginManager, UserMixin, login_user, login_required, logout_user, current_user
 from werkzeug.security import generate_password_hash, check_password_hash
-
-def es_antes_de_las_11():
-    # Usamos la zona horaria de España para que funcione igual en el servidor de Render
-    tz = ZoneInfo("Europe/Madrid")
-    ahora = datetime.datetime.now(tz)
-    # Retorna True si la hora actual es menor que las 11:00:00
-    return ahora.time() < time(11, 0)
 
 app = Flask(__name__)
 app.config['SECRET_KEY'] = 'mi_clave_secreta_super_segura'
@@ -42,7 +35,8 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     puntos_temporada = db.Column(db.Integer, default=0)
-    jugado_hoy = db.Column(db.Boolean, default=False)
+    # NUEVO: Guardamos la fecha del último tablero que completó el usuario
+    ultimo_juego_fecha = db.Column(db.Date, nullable=True)
     grupo_id = db.Column(db.Integer, db.ForeignKey('grupo.id'), nullable=True)
 
 @login_manager.user_loader
@@ -53,7 +47,6 @@ def load_user(user_id):
 # --- BASE DE DATOS AUTOMÁTICA DE TRAYECTORIAS (64 JUGADORES) ---
 
 JUGADORES_DB = {
-    # Real Madrid / Barcelona / PSG Core
     "Messi": [("Barcelona", 2004, 2021), ("PSG", 2021, 2023), ("Inter Miami", 2023, 2026)],
     "C. Ronaldo": [("Manchester United", 2003, 2009), ("Real Madrid", 2009, 2018), ("Juventus", 2018, 2021), ("Manchester United", 2021, 2022)],
     "Benzema": [("Lyon", 2004, 2009), ("Real Madrid", 2009, 2023)],
@@ -70,8 +63,6 @@ JUGADORES_DB = {
     "Cavani": [("Palermo", 2007, 2010), ("Napoli", 2010, 2013), ("PSG", 2013, 2020), ("Manchester United", 2020, 2022), ("Valencia", 2022, 2023)],
     "Thiago Silva": [("Milan", 2009, 2012), ("PSG", 2012, 2020), ("Chelsea", 2020, 2024)],
     "Marquinhos": [("Roma", 2012, 2013), ("PSG", 2013, 2026)],
-    
-    # Premier League / Barcelona / Bayern / Otros
     "Suárez": [("Ajax", 2007, 2011), ("Liverpool", 2011, 2014), ("Barcelona", 2014, 2020), ("Atletico", 2020, 2022), ("Inter Miami", 2024, 2026)],
     "Iniesta": [("Barcelona", 2002, 2018)],
     "Xavi": [("Barcelona", 1998, 2015)],
@@ -108,22 +99,16 @@ JUGADORES_DB = {
     "Henry": [("Monaco", 1994, 1999), ("Juventus", 1999, 1999), ("Arsenal", 1999, 2007), ("Barcelona", 2007, 2010)],
     "Ronaldinho": [("PSG", 2001, 2003), ("Barcelona", 2003, 2008), ("Milan", 2008, 2011)],
     "Eto'o": [("Real Madrid", 1997, 2000), ("Mallorca", 2000, 2004), ("Barcelona", 2004, 2009), ("Inter", 2009, 2011), ("Chelsea", 2013, 2014), ("Everton", 2014, 2015)],
-
-    # --- NUEVOS: ATLÉTICO DE MADRID ---
     "Griezmann": [("Real Sociedad", 2009, 2014), ("Atletico", 2014, 2019), ("Barcelona", 2019, 2021), ("Atletico", 2021, 2026)],
     "Falcao": [("Porto", 2009, 2011), ("Atletico", 2011, 2013), ("Monaco", 2013, 2019), ("Manchester United", 2014, 2015), ("Chelsea", 2015, 2016)],
     "Godín": [("Villarreal", 2007, 2010), ("Atletico", 2010, 2019), ("Inter", 2019, 2020)],
     "Oblak": [("Benfica", 2010, 2014), ("Atletico", 2014, 2026)],
     "Diego Costa": [("Atletico", 2010, 2014), ("Chelsea", 2014, 2017), ("Atletico", 2018, 2020)],
-
-    # --- NUEVOS: REAL BETIS ---
     "Joaquín": [("Real Betis", 2000, 2006), ("Valencia", 2006, 2011), ("Malaga", 2011, 2013), ("Fiorentina", 2013, 2015), ("Real Betis", 2015, 2023)],
     "Fekir": [("Lyon", 2013, 2019), ("Real Betis", 2019, 2024)],
     "Canales": [("Real Madrid", 2010, 2012), ("Valencia", 2011, 2014), ("Real Sociedad", 2014, 2018), ("Real Betis", 2018, 2023)],
     "Isco": [("Valencia", 2010, 2011), ("Malaga", 2011, 2013), ("Real Madrid", 2013, 2022), ("Sevilla", 2022, 2022), ("Real Betis", 2023, 2026)],
     "Bellerín": [("Arsenal", 2013, 2022), ("Real Betis", 2021, 2022), ("Barcelona", 2022, 2023), ("Real Betis", 2023, 2026)],
-
-    # --- NUEVOS: SEVILLA FC ---
     "Jesús Navas": [("Sevilla", 2003, 2013), ("Manchester City", 2013, 2017), ("Sevilla", 2017, 2026)],
     "Rakitic": [("Schalke", 2007, 2011), ("Sevilla", 2011, 2014), ("Barcelona", 2014, 2020), ("Sevilla", 2020, 2024)],
     "Banega": [("Valencia", 2008, 2014), ("Atletico", 2008, 2009), ("Sevilla", 2014, 2016), ("Inter", 2016, 2017), ("Sevilla", 2017, 2020)],
@@ -131,38 +116,49 @@ JUGADORES_DB = {
 }
 
 
-# --- ALGORITMO DE COINCIDENCIA AUTOMÁTICA EN CLUBES ---
+# --- LÓGICA DE CONTROL DE CICLO DIARIO (11:00 AM) ---
 
-def compartieron_club(carrera1, carrera2):
-    for club1, entrada1, salida1 in carrera1:
-        for club2, entrada2, salida2 in carrera2:
-            if club1 == club2:
-                # Comprobar solapamiento de años en el mismo club
-                inicio_comun = max(entrada1, entrada2)
-                fin_comun = min(salida1, salida2)
-                if inicio_comun <= fin_comun:
-                    return True
-    return False
+def obtener_fecha_juego_actual():
+    """Retorna la fecha del tablero que está activo en este momento."""
+    tz = ZoneInfo("Europe/Madrid")
+    ahora = datetime.datetime.now(tz)
+    
+    # Si aún no son las 11:00 AM de hoy, el tablero de hoy todavía no se ha abierto,
+    # por lo tanto, el tablero activo sigue siendo el de ayer.
+    if ahora.time() < time(11, 0):
+        return (ahora - datetime.timedelta(days=1)).date()
+    else:
+        return ahora.date()
 
-def obtener_juego_del_dia():
-    # Usamos la fecha de hoy como semilla para asegurar un juego único por día
-    hoy_str = datetime.date.today().strftime('%Y%m%d')
+def obtener_juego_del_dia(fecha_juego):
+    # Usamos la fecha del juego activo como semilla
+    hoy_str = fecha_juego.strftime('%Y%m%d')
     semilla = int(hoy_str)
     
-    # Seleccionamos 16 jugadores de forma aleatoria y estable para el día de hoy
     pool_jugadores = list(JUGADORES_DB.keys())
     random.seed(semilla)
     jugadores_hoy = random.sample(pool_jugadores, 16)
     
-    # Calculamos de forma matemática todas las conexiones posibles para esos 16
     conexiones_hoy = []
     for i in range(len(jugadores_hoy)):
         for j in range(i + 1, len(jugadores_hoy)):
             p1 = jugadores_hoy[i]
             p2 = jugadores_hoy[j]
-            if compartieron_club(JUGADORES_DB[p1], JUGADORES_DB[p2]):
-                conexiones_hoy.append((p1, p2))
-                
+            
+            c1 = JUGADORES_DB[p1]
+            c2 = JUGADORES_DB[p2]
+            
+            # Algoritmo de comparación
+            for club1, ent1, sal1 in c1:
+                for club2, ent2, sal2 in c2:
+                    if club1 == club2:
+                        in_comun = max(ent1, ent2)
+                        fin_comun = min(sal1, sal2)
+                        if in_comun <= fin_comun:
+                            conexiones_hoy.append((p1, p2))
+                            
+    # Eliminar duplicados si los hubiera
+    conexiones_hoy = list(set(conexiones_hoy))
     return jugadores_hoy, conexiones_hoy
 
 
@@ -172,35 +168,46 @@ def obtener_juego_del_dia():
 @login_required
 def index():
     if current_user.username == 'admin':
-        # El administrador ve a todos los usuarios ordenados por nombre
-        usuarios = User.query.filter(User.username != 'admin').order_by(User.username.asc()).all()
-        nombre_grupo = "Administración"
+        usuarios = User.query.filter(User.username != 'admin').all()
+        nombre_grupo = "Administración (Ver todo)"
+        bloqueado_hora = False
+        ha_jugado_hoy = False
     elif current_user.grupo_id:
-        # Los usuarios normales ven la clasificación de su propio grupo
         usuarios = User.query.filter_by(grupo_id=current_user.grupo_id).filter(User.username != 'admin').order_by(User.puntos_temporada.desc()).all()
         nombre_grupo = current_user.grupo.nombre
+        
+        # --- NUEVA LÓGICA DE ACCESO ---
+        fecha_activa = obtener_fecha_juego_actual()
+        # El usuario está bloqueado SOLO si ya jugó la fecha del tablero que está activo hoy
+        ha_jugado_hoy = (current_user.ultimo_juego_fecha == fecha_activa)
+        
+        # El cronómetro se muestra solo si ya ha jugado el reto activo y tiene que esperar al de mañana
+        bloqueado_hora = ha_jugado_hoy
     else:
         usuarios = []
-        nombre_grupo = "Sin grupo"
-    
-    bloqueado_hora = es_antes_de_las_11()
-    
-    return render_template('index.html', usuarios=usuarios, nombre_grupo=nombre_grupo, bloqueado_hora=bloqueado_hora)
+        nombre_grupo = "Ninguno (Sin asignar)"
+        bloqueado_hora = False
+        ha_jugado_hoy = False
+        
+    return render_template('index.html', usuarios=usuarios, nombre_grupo=nombre_grupo, bloqueado_hora=bloqueado_hora, ha_jugado_hoy=ha_jugado_hoy)
 
 
 @app.route('/jugar')
 @login_required
 def jugar():
-    # Protección estricta: Si intentan entrar antes de las 11, se les expulsa
-    if es_antes_de_las_11():
-        flash("El reto de hoy aún no está activo. Abre a las 11:00 AM.", "error")
+    if current_user.username == 'admin':
+        flash("El administrador no puede participar en las partidas de juego.", "error")
         return redirect(url_for('index'))
 
-    if current_user.jugado_hoy:
-        flash("Ya has participado en el reto de hoy. ¡Vuelve mañana!", "error")
+    fecha_activa = obtener_fecha_juego_actual()
+    
+    # Comprobación de seguridad: Si ya jugó el tablero activo, le expulsamos
+    if current_user.ultimo_juego_fecha == fecha_activa:
+        flash("Ya has participado en el reto activo. ¡Vuelve cuando se abra el siguiente!", "error")
         return redirect(url_for('index'))
 
-    jugadores_hoy, conexiones_hoy = obtener_juego_del_dia()
+    # Carga de la partida utilizando la fecha activa (que puede ser ayer si es antes de las 11 y no ha jugado)
+    jugadores_hoy, conexiones_hoy = obtener_juego_del_dia(fecha_activa)
 
     random.seed()
     jugadores_mezclados = list(jugadores_hoy)
@@ -212,8 +219,13 @@ def jugar():
 @app.route('/guardar_puntuacion', methods=['POST'])
 @login_required
 def guardar_puntuacion():
-    if current_user.jugado_hoy:
-        return jsonify({"status": "error", "message": "Ya has jugado hoy"}), 400
+    if current_user.username == 'admin':
+        return jsonify({"status": "error", "message": "El administrador no guarda puntuación"}), 400
+
+    fecha_activa = obtener_fecha_juego_actual()
+    
+    if current_user.ultimo_juego_fecha == fecha_activa:
+        return jsonify({"status": "error", "message": "Ya has jugado este reto"}), 400
 
     datos = request.get_json()
     segundos = datos.get('segundos', 9999)
@@ -222,7 +234,8 @@ def guardar_puntuacion():
     if completado:
         puntos_obtenidos = max(100, 1000 - segundos) 
         current_user.puntos_temporada += puntos_obtenidos
-        current_user.jugado_hoy = True
+        # Guardamos la fecha del tablero que acaba de completar como su fecha de último juego
+        current_user.ultimo_juego_fecha = fecha_activa
         db.session.commit()
         
         flash(f"¡Reto completado en {segundos} segundos! Sumas {puntos_obtenidos} puntos.", "success")
@@ -250,30 +263,6 @@ def crear_grupo():
             flash(f"Grupo '{nombre_nuevo}' creado correctamente.", "success")
     return redirect(url_for('index'))
 
-# --- ADMIN: ELIMINAR USUARIO ---
-@app.route('/borrar_usuario/<int:user_id>', methods=['POST'])
-@login_required
-def borrar_usuario(user_id):
-    if current_user.username != 'admin':
-        flash("No tienes permisos de administrador.", "error")
-        return redirect(url_for('index'))
-    
-    usuario = User.query.get(user_id)
-    if usuario:
-        # Evitar que el admin borre su propia cuenta accidentalmente
-        if usuario.username == 'admin':
-            flash("No puedes eliminar la cuenta de administrador.", "error")
-            return redirect(url_for('index'))
-        
-        nombre_eliminado = usuario.username
-        db.session.delete(usuario)
-        db.session.commit()
-        flash(f"El usuario '{nombre_eliminado}' ha sido eliminado con éxito.", "success")
-    else:
-        flash("Usuario no encontrado.", "error")
-        
-    return redirect(url_for('index'))
-
 
 @app.route('/reset_clasificacion', methods=['POST'])
 @login_required
@@ -285,9 +274,32 @@ def reset_clasificacion():
     usuarios = User.query.all()
     for usuario in usuarios:
         usuario.puntos_temporada = 0
-        usuario.jugado_hoy = False
+        usuario.ultimo_juego_fecha = None  # Permitir volver a jugar a todos tras el reset
     db.session.commit()
     flash("La clasificación general ha sido reiniciada a 0.", "success")
+    return redirect(url_for('index'))
+
+
+@app.route('/borrar_usuario/<int:user_id>', methods=['POST'])
+@login_required
+def borrar_usuario(user_id):
+    if current_user.username != 'admin':
+        flash("No tienes permisos de administrador.", "error")
+        return redirect(url_for('index'))
+    
+    usuario = User.query.get(user_id)
+    if usuario:
+        if usuario.username == 'admin':
+            flash("No puedes eliminar la cuenta de administrador.", "error")
+            return redirect(url_for('index'))
+        
+        nombre_eliminado = usuario.username
+        db.session.delete(usuario)
+        db.session.commit()
+        flash(f"El usuario '{nombre_eliminado}' ha sido eliminado con éxito.", "success")
+    else:
+        flash("Usuario no encontrado.", "error")
+        
     return redirect(url_for('index'))
 
 
@@ -347,7 +359,7 @@ def logout():
 @app.route('/reset_hoy')
 @login_required
 def reset_hoy():
-    current_user.jugado_hoy = False
+    current_user.ultimo_juego_fecha = None
     db.session.commit()
     flash("Se ha reiniciado tu estado para pruebas.", "success")
     return redirect(url_for('index'))
@@ -356,14 +368,12 @@ def reset_hoy():
 with app.app_context():
     db.create_all()
     
-    # 1. Crear el grupo "Rotonda" automáticamente si no existe
     rotonda_existe = Grupo.query.filter_by(nombre='Rotonda').first()
     if not rotonda_existe:
         rotonda_inicial = Grupo(nombre='Rotonda')
         db.session.add(rotonda_inicial)
         db.session.commit()
     
-    # 2. Crear el administrador por defecto si no existe
     admin_existe = User.query.filter_by(username='admin').first()
     if not admin_existe:
         pass_encriptada = generate_password_hash('admin')
