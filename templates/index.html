@@ -138,7 +138,7 @@
         const segundos = Math.floor((diferencia % (1000 * 60)) / 1000);
         
         const hDisplay = horas.toString().padStart(2, '0');
-        const mDisplay = minutes.toString().padStart(2, '0');
+        const mDisplay = minutos.toString().padStart(2, '0');
         const sDisplay = segundos.toString().padStart(2, '0');
         
         document.getElementById('cronometro-espera').innerText = `${hDisplay}h ${mDisplay}m ${sDisplay}s`;
