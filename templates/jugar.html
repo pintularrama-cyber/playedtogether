@@ -2,45 +2,68 @@
 {% block content %}
 <div class="space-y-4">
     
-    <!-- Info del Juego y Cronómetro -->
-    <div class="bg-white p-4 rounded-lg shadow flex justify-between items-center">
-        <div>
-            <h2 class="font-bold text-gray-800 text-sm">PlayedTogether?</h2>
-            <p class="text-[11px] text-gray-500">Haz 8 parejas. Toca una pareja verde para deshacerla.</p>
+    <!-- PANTALLA DE INSTRUCCIONES INICIAL (Lobby) -->
+    <div id="lobby-juego" class="bg-white p-6 rounded-lg shadow-md text-center space-y-4">
+        <h2 class="text-xl font-bold text-gray-800">⚽ Reto: Compañeros de Club</h2>
+        <div class="p-4 bg-gray-50 rounded-lg text-left text-xs text-gray-600 space-y-2 leading-relaxed">
+            <p><strong>Reglas del juego:</strong></p>
+            <p>• Tienes una cuadrícula de <strong>16 futbolistas</strong>.</p>
+            <p>• Debes encontrar las <strong>8 parejas de jugadores</strong> que han coincidido en el vestuario de un mismo club.</p>
+            <p>• Pulsa una pareja en verde para deshacer el movimiento si te equivocas.</p>
+            <p>• <strong>Tiempo</strong>: El cronómetro empezará a correr al pulsar Iniciar. Cada segundo consumido te restará 1 punto (Máx: 1000 pts / Mín: 100 pts).</p>
         </div>
-        <div class="text-right">
-            <span class="text-xs text-gray-500 block">Tiempo</span>
-            <span id="cronometro" class="text-2xl font-mono font-bold text-emerald-600">0s</span>
-        </div>
-    </div>
-
-    <!-- Cuadrícula 4x4 -->
-    <div class="grid grid-cols-4 gap-2 bg-gray-200 p-2 rounded-lg">
-        {% for jugador in jugadores %}
-            <button class="carta bg-white text-gray-800 text-xs font-bold py-4 px-1 rounded shadow h-20 flex items-center justify-center text-center break-words transition active:scale-95 duration-100 cursor-pointer"
-                    onclick="seleccionarCarta(this)" 
-                    data-nombre="{{ jugador }}">
-                {{ jugador }}
-            </button>
-        {% endfor %}
-    </div>
-
-    <!-- Botón de Reiniciar -->
-    <div class="text-center">
-        <button onclick="reiniciarTablero()" class="w-full bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-3 px-2 rounded-lg shadow">
-            Reiniciar tablero 🔄
+        <button onclick="empezarJuego()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow transition duration-200">
+            Iniciar Reto ⚽
         </button>
+    </div>
+
+    <!-- CONTENEDOR DEL JUEGO (Oculto al inicio) -->
+    <div id="contenedor-juego" class="space-y-4 hidden">
+        <div class="bg-white p-4 rounded-lg shadow flex justify-between items-center">
+            <div>
+                <h2 class="font-bold text-gray-800 text-sm">PlayedTogether?</h2>
+                <p class="text-[11px] text-gray-500">Toca una pareja verde para deshacerla.</p>
+            </div>
+            <div class="text-right">
+                <span class="text-xs text-gray-500 block">Tiempo</span>
+                <span id="cronometro" class="text-2xl font-mono font-bold text-emerald-600">0s</span>
+            </div>
+        </div>
+
+        <div class="grid grid-cols-4 gap-2 bg-gray-200 p-2 rounded-lg">
+            {% for jugador in jugadores %}
+                <button class="carta bg-white text-gray-800 text-xs font-bold py-4 px-1 rounded shadow h-20 flex items-center justify-center text-center break-words transition active:scale-95 duration-100 cursor-pointer"
+                        onclick="seleccionarCarta(this)" 
+                        data-nombre="{{ jugador }}">
+                    {{ jugador }}
+                </button>
+            {% endfor %}
+        </div>
+
+        <div class="text-center">
+            <button onclick="reiniciarTablero()" class="w-full bg-gray-600 hover:bg-gray-700 text-white text-xs font-bold py-3 px-2 rounded-lg shadow">
+                Reiniciar tablero 🔄
+            </button>
+        </div>
     </div>
 
 </div>
 
 <script>
     const conexionesPermitidas = {{ conexiones | tojson }};
-    
     let cartaSeleccionada = null;
     let parejasCompletadas = 0;
     let segundos = 0;
     let intervaloCronometro;
+
+    function empezarJuego() {
+        // Ocultar pantalla explicativa y mostrar el juego
+        document.getElementById('lobby-juego').classList.add('hidden');
+        document.getElementById('contenedor-juego').classList.remove('hidden');
+        
+        // Iniciar el cronómetro justo en este instante
+        iniciarCronometro();
+    }
 
     function iniciarCronometro() {
         clearInterval(intervaloCronometro);
@@ -52,12 +75,7 @@
         }, 1000);
     }
 
-    // Iniciar cronómetro por primera vez al cargar el tablero
-    iniciarCronometro();
-
     function seleccionarCarta(boton) {
-        
-        // CASO 1: Si el usuario pulsa sobre una carta que ya está en VERDE (completada)
         if (boton.hasAttribute('data-pair-id')) {
             const idPareja = boton.getAttribute('data-pair-id');
             const cartasDeLaPareja = document.querySelectorAll(`[data-pair-id="${idPareja}"]`);
@@ -78,7 +96,6 @@
             return;
         }
 
-        // CASO 2: Lógica normal de selección para cartas blancas
         boton.classList.remove('bg-white');
         boton.classList.add('bg-blue-200');
 
@@ -110,7 +127,6 @@
 
     function marcarCorrectas(btn1, btn2) {
         const idParejaUnique = 'pareja-' + Math.random().toString(36).substr(2, 9);
-        
         [btn1, btn2].forEach(btn => {
             btn.classList.remove('bg-blue-200', 'bg-white');
             btn.classList.add('bg-green-500', 'text-white');
@@ -132,7 +148,6 @@
         }, 500);
     }
 
-    // ELIMINADO EL REINICIO DE TIEMPO (Solo limpia el tablero de juego)
     function reiniciarTablero() {
         const cartas = document.querySelectorAll('.carta');
         cartas.forEach(btn => {

@@ -40,7 +40,6 @@ class User(UserMixin, db.Model):
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     puntos_temporada = db.Column(db.Integer, default=0)
-    # NUEVO: Almacenar puntos históricos acumulados de todas las temporadas
     puntos_general = db.Column(db.Integer, default=0)
     ultimo_juego_fecha = db.Column(db.Date, nullable=True)
     partidas_jugadas = db.Column(db.Integer, default=0)
@@ -51,98 +50,292 @@ def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-# --- BASE DE DATOS AUTOMÁTICA DE TRAYECTORIAS (64 JUGADORES) ---
+# --- BASE DE DATOS ESTADÍSTICA DE TRAYECTORIAS Y MÉTRICAS (64 JUGADORES) ---
 
 JUGADORES_DB = {
-    "Messi": [("Barcelona", 2004, 2021), ("PSG", 2021, 2023), ("Inter Miami", 2023, 2026)],
-    "C. Ronaldo": [("Manchester United", 2003, 2009), ("Real Madrid", 2009, 2018), ("Juventus", 2018, 2021), ("Manchester United", 2021, 2022)],
-    "Benzema": [("Lyon", 2004, 2009), ("Real Madrid", 2009, 2023)],
-    "Neymar": [("Barcelona", 2013, 2017), ("PSG", 2017, 2023)],
-    "Mbappé": [("Monaco", 2015, 2017), ("PSG", 2017, 2024), ("Real Madrid", 2024, 2026)],
-    "Sergio Ramos": [("Sevilla", 2003, 2005), ("Real Madrid", 2005, 2021), ("PSG", 2021, 2023), ("Sevilla", 2023, 2024)],
-    "Modric": [("Tottenham", 2008, 2012), ("Real Madrid", 2012, 2026)],
-    "Kroos": [("Bayern", 2007, 2014), ("Bayer Leverkusen", 2009, 2010), ("Real Madrid", 2014, 2024)],
-    "Casemiro": [("Real Madrid", 2013, 2022), ("Porto", 2014, 2015), ("Manchester United", 2022, 2026)],
-    "Varane": [("Real Madrid", 2011, 2021), ("Manchester United", 2021, 2024)],
-    "Marcelo": [("Real Madrid", 2007, 2022), ("Olympiacos", 2022, 2023), ("Fluminense", 2023, 2025)],
-    "Di María": [("Benfica", 2007, 2010), ("Real Madrid", 2010, 2014), ("Manchester United", 2014, 2015), ("PSG", 2015, 2022), ("Juventus", 2022, 2023), ("Benfica", 2023, 2025)],
-    "Ibrahimovic": [("Ajax", 2001, 2004), ("Juventus", 2004, 2006), ("Inter", 2006, 2009), ("Barcelona", 2009, 2010), ("Milan", 2010, 2012), ("PSG", 2012, 2016), ("Manchester United", 2016, 2018), ("Milan", 2020, 2023)],
-    "Cavani": [("Palermo", 2007, 2010), ("Napoli", 2010, 2013), ("PSG", 2013, 2020), ("Manchester United", 2020, 2022), ("Valencia", 2022, 2023)],
-    "Thiago Silva": [("Milan", 2009, 2012), ("PSG", 2012, 2020), ("Chelsea", 2020, 2024)],
-    "Marquinhos": [("Roma", 2012, 2013), ("PSG", 2013, 2026)],
-    "Suárez": [("Ajax", 2007, 2011), ("Liverpool", 2011, 2014), ("Barcelona", 2014, 2020), ("Atletico", 2020, 2022), ("Inter Miami", 2024, 2026)],
-    "Iniesta": [("Barcelona", 2002, 2018)],
-    "Xavi": [("Barcelona", 1998, 2015)],
-    "Busquets": [("Barcelona", 2008, 2023), ("Inter Miami", 2023, 2026)],
-    "Jordi Alba": [("Valencia", 2009, 2012), ("Barcelona", 2012, 2023), ("Inter Miami", 2023, 2026)],
-    "Piqué": [("Manchester United", 2004, 2008), ("Zaragoza", 2006, 2007), ("Barcelona", 2008, 2022)],
-    "Puyol": [("Barcelona", 1999, 2014)],
-    "Dani Alves": [("Sevilla", 2002, 2008), ("Barcelona", 2008, 2016), ("Juventus", 2016, 2017), ("PSG", 2017, 2019), ("Barcelona", 2021, 2022)],
-    "Mascherano": [("West Ham", 2006, 2007), ("Liverpool", 2007, 2010), ("Barcelona", 2010, 2018)],
-    "De Bruyne": [("Chelsea", 2012, 2014), ("Wolfsburg", 2014, 2015), ("Manchester City", 2015, 2026)],
-    "Haaland": [("Salzburg", 2019, 2020), ("Dortmund", 2020, 2022), ("Manchester City", 2022, 2026)],
-    "David Silva": [("Valencia", 2004, 2010), ("Manchester City", 2010, 2020), ("Real Sociedad", 2020, 2023)],
-    "Agüero": [("Atletico", 2006, 2011), ("Manchester City", 2010, 2021), ("Barcelona", 2021, 2021)],
-    "Yaya Touré": [("Monaco", 2006, 2007), ("Barcelona", 2007, 2010), ("Manchester City", 2010, 2018)],
-    "Tévez": [("West Ham", 2006, 2007), ("Manchester United", 2007, 2009), ("Manchester City", 2009, 2013), ("Juventus", 2013, 2015)],
-    "Rooney": [("Everton", 2002, 2004), ("Manchester United", 2004, 2017), ("Everton", 2017, 2018)],
-    "Pogba": [("Manchester United", 2011, 2012), ("Juventus", 2012, 2016), ("Manchester United", 2016, 2022), ("Juventus", 2022, 2024)],
-    "Rashford": [("Manchester United", 2015, 2026)],
-    "De Gea": [("Atletico", 2009, 2011), ("Manchester United", 2011, 2023), ("Fiorentina", 2024, 2026)],
-    "Lewandowski": [("Dortmund", 2010, 2014), ("Bayern", 2014, 2022), ("Barcelona", 2022, 2026)],
-    "Müller": [("Bayern", 2008, 2026)],
-    "Robben": [("Chelsea", 2004, 2007), ("Real Madrid", 2007, 2009), ("Bayern", 2009, 2019)],
-    "Ribéry": [("Marseille", 2005, 2007), ("Bayern", 2007, 2019), ("Fiorentina", 2019, 2021)],
-    "Alaba": [("Bayern", 2010, 2021), ("Hoffenheim", 2011, 2011), ("Real Madrid", 2021, 2026)],
-    "Lahm": [("Bayern", 2001, 2017), ("Stuttgart", 2003, 2005)],
-    "Schweinsteiger": [("Bayern", 2002, 2015), ("Manchester United", 2015, 2017)],
-    "Thiago": [("Barcelona", 2009, 2013), ("Bayern", 2013, 2020), ("Liverpool", 2020, 2024)],
-    "Hazard": [("Lille", 2007, 2012), ("Chelsea", 2012, 2019), ("Real Madrid", 2019, 2023)],
-    "Lampard": [("Chelsea", 2001, 2014), ("Manchester City", 2014, 2015)],
-    "Terry": [("Chelsea", 1998, 2017)],
-    "Drogba": [("Marseille", 2003, 2004), ("Chelsea", 2004, 2012), ("Galatasaray", 2013, 2014), ("Chelsea", 2014, 2015)],
-    "Čech": [("Rennes", 2002, 2004), ("Chelsea", 2004, 2015), ("Arsenal", 2015, 2019)],
-    "Fàbregas": [("Arsenal", 2003, 2011), ("Barcelona", 2011, 2014), ("Chelsea", 2014, 2019), ("Monaco", 2019, 2022)],
-    "Henry": [("Monaco", 1994, 1999), ("Juventus", 1999, 1999), ("Arsenal", 1999, 2007), ("Barcelona", 2007, 2010)],
-    "Ronaldinho": [("PSG", 2001, 2003), ("Barcelona", 2003, 2008), ("Milan", 2008, 2011)],
-    "Eto'o": [("Real Madrid", 1997, 2000), ("Mallorca", 2000, 2004), ("Barcelona", 2004, 2009), ("Inter", 2009, 2011), ("Chelsea", 2013, 2014), ("Everton", 2014, 2015)],
-    "Griezmann": [("Real Sociedad", 2009, 2014), ("Atletico", 2014, 2019), ("Barcelona", 2019, 2021), ("Atletico", 2021, 2026)],
-    "Falcao": [("Porto", 2009, 2011), ("Atletico", 2011, 2013), ("Monaco", 2013, 2019), ("Manchester United", 2014, 2015), ("Chelsea", 2015, 2016)],
-    "Godín": [("Villarreal", 2007, 2010), ("Atletico", 2010, 2019), ("Inter", 2019, 2020)],
-    "Oblak": [("Benfica", 2010, 2014), ("Atletico", 2014, 2026)],
-    "Diego Costa": [("Atletico", 2010, 2014), ("Chelsea", 2014, 2017), ("Atletico", 2018, 2020)],
-    "Joaquín": [("Real Betis", 2000, 2006), ("Valencia", 2006, 2011), ("Malaga", 2011, 2013), ("Fiorentina", 2013, 2015), ("Real Betis", 2015, 2023)],
-    "Fekir": [("Lyon", 2013, 2019), ("Real Betis", 2019, 2024)],
-    "Canales": [("Real Madrid", 2010, 2012), ("Valencia", 2011, 2014), ("Real Sociedad", 2014, 2018), ("Real Betis", 2018, 2023)],
-    "Isco": [("Valencia", 2010, 2011), ("Malaga", 2011, 2013), ("Real Madrid", 2013, 2022), ("Sevilla", 2022, 2022), ("Real Betis", 2023, 2026)],
-    "Bellerín": [("Arsenal", 2013, 2022), ("Real Betis", 2021, 2022), ("Barcelona", 2022, 2023), ("Real Betis", 2023, 2026)],
-    "Jesús Navas": [("Sevilla", 2003, 2013), ("Manchester City", 2013, 2017), ("Sevilla", 2017, 2026)],
-    "Rakitic": [("Schalke", 2007, 2011), ("Sevilla", 2011, 2014), ("Barcelona", 2014, 2020), ("Sevilla", 2020, 2024)],
-    "Banega": [("Valencia", 2008, 2014), ("Atletico", 2008, 2009), ("Sevilla", 2014, 2016), ("Inter", 2016, 2017), ("Sevilla", 2017, 2020)],
-    "Luuk de Jong": [("Monchengladbach", 2012, 2014), ("PSV", 2014, 2019), ("Sevilla", 2019, 2022), ("Barcelona", 2021, 2022), ("PSV", 2022, 2026)]
+    # Real Madrid / Barcelona / PSG
+    "Messi": {
+        "carrera": [("Barcelona", 2004, 2021), ("PSG", 2021, 2023), ("Inter Miami", 2023, 2026)],
+        "goles": 835, "asistencias": 372, "tarjetas": 15, "partidos": 1062
+    },
+    "C. Ronaldo": {
+        "carrera": [("Manchester United", 2003, 2009), ("Real Madrid", 2009, 2018), ("Juventus", 2018, 2021), ("Manchester United", 2021, 2022)],
+        "goles": 895, "asistencias": 251, "tarjetas": 124, "partidos": 1225
+    },
+    "Benzema": {
+        "carrera": [("Lyon", 2004, 2009), ("Real Madrid", 2009, 2023)],
+        "goles": 472, "asistencias": 191, "tarjetas": 18, "partidos": 915
+    },
+    "Neymar": {
+        "carrera": [("Barcelona", 2013, 2017), ("PSG", 2017, 2023)],
+        "goles": 361, "asistencias": 224, "tarjetas": 139, "partidos": 612
+    },
+    "Mbappé": {
+        "carrera": [("Monaco", 2015, 2017), ("PSG", 2017, 2024), ("Real Madrid", 2024, 2026)],
+        "goles": 332, "asistencias": 128, "tarjetas": 32, "partidos": 448
+    },
+    "Sergio Ramos": {
+        "carrera": [("Sevilla", 2003, 2005), ("Real Madrid", 2005, 2021), ("PSG", 2021, 2023), ("Sevilla", 2023, 2024)],
+        "goles": 137, "asistencias": 40, "tarjetas": 265, "partidos": 985
+    },
+    "Modric": {
+        "carrera": [("Tottenham", 2008, 2012), ("Real Madrid", 2012, 2026)],
+        "goles": 115, "asistencias": 152, "tarjetas": 89, "partidos": 880
+    },
+    "Kroos": {
+        "carrera": [("Bayern", 2007, 2014), ("Bayer Leverkusen", 2009, 2010), ("Real Madrid", 2014, 2024)],
+        "goles": 79, "asistencias": 162, "tarjetas": 84, "partidos": 820
+    },
+    "Casemiro": {
+        "carrera": [("Real Madrid", 2013, 2022), ("Porto", 2014, 2015), ("Manchester United", 2022, 2026)],
+        "goles": 55, "asistencias": 48, "tarjetas": 147, "partidos": 650
+    },
+    "Varane": {
+        "carrera": [("Real Madrid", 2011, 2021), ("Manchester United", 2021, 2024)],
+        "goles": 21, "asistencias": 8, "tarjetas": 24, "partidos": 480
+    },
+    "Marcelo": {
+        "carrera": [("Real Madrid", 2007, 2022), ("Olympiacos", 2022, 2023), ("Fluminense", 2023, 2025)],
+        "goles": 48, "asistencias": 103, "tarjetas": 98, "partidos": 590
+    },
+    "Di María": {
+        "carrera": [("Benfica", 2007, 2010), ("Real Madrid", 2010, 2014), ("Manchester United", 2014, 2015), ("PSG", 2015, 2022), ("Juventus", 2022, 2023), ("Benfica", 2023, 2025)],
+        "goles": 178, "asistencias": 260, "tarjetas": 89, "partidos": 840
+    },
+    "Ibrahimovic": {
+        "carrera": [("Ajax", 2001, 2004), ("Juventus", 2004, 2006), ("Inter", 2006, 2009), ("Barcelona", 2009, 2010), ("Milan", 2010, 2012), ("PSG", 2012, 2016), ("Manchester United", 2016, 2018), ("Milan", 2020, 2023)],
+        "goles": 573, "asistencias": 210, "tarjetas": 152, "partidos": 988
+    },
+    "Cavani": {
+        "carrera": [("Palermo", 2007, 2010), ("Napoli", 2010, 2013), ("PSG", 2013, 2020), ("Manchester United", 2020, 2022), ("Valencia", 2022, 2023)],
+        "goles": 435, "asistencias": 85, "tarjetas": 110, "partidos": 780
+    },
+    "Thiago Silva": {
+        "carrera": [("Milan", 2009, 2012), ("PSG", 2012, 2020), ("Chelsea", 2020, 2024)],
+        "goles": 38, "asistencias": 21, "tarjetas": 94, "partidos": 765
+    },
+    "Marquinhos": {
+        "carrera": [("Roma", 2012, 2013), ("PSG", 2013, 2026)],
+        "goles": 38, "asistencias": 12, "tarjetas": 42, "partidos": 520
+    },
+    "Suárez": {
+        "carrera": [("Ajax", 2007, 2011), ("Liverpool", 2011, 2014), ("Barcelona", 2014, 2020), ("Atletico", 2020, 2022), ("Inter Miami", 2024, 2026)],
+        "goles": 560, "asistencias": 298, "tarjetas": 160, "partidos": 910
+    },
+    "Iniesta": {
+        "carrera": [("Barcelona", 2002, 2018)],
+        "goles": 88, "asistencias": 162, "tarjetas": 62, "partidos": 870
+    },
+    "Xavi": {
+        "carrera": [("Barcelona", 1998, 2015)],
+        "goles": 119, "asistencias": 212, "tarjetas": 75, "partidos": 940
+    },
+    "Busquets": {
+        "carrera": [("Barcelona", 2008, 2023), ("Inter Miami", 2023, 2026)],
+        "goles": 19, "asistencias": 45, "tarjetas": 178, "partidos": 885
+    },
+    "Jordi Alba": {
+        "carrera": [("Valencia", 2009, 2012), ("Barcelona", 2012, 2023), ("Inter Miami", 2023, 2026)],
+        "goles": 37, "asistencias": 105, "tarjetas": 115, "partidos": 660
+    },
+    "Piqué": {
+        "carrera": [("Manchester United", 2004, 2008), ("Zaragoza", 2006, 2007), ("Barcelona", 2008, 2022)],
+        "goles": 63, "asistencias": 15, "tarjetas": 162, "partidos": 769
+    },
+    "Puyol": {
+        "carrera": [("Barcelona", 1999, 2014)],
+        "goles": 20, "asistencias": 13, "tarjetas": 119, "partidos": 682
+    },
+    "Dani Alves": {
+        "carrera": [("Sevilla", 2002, 2008), ("Barcelona", 2008, 2016), ("Juventus", 2016, 2017), ("PSG", 2017, 2019), ("Barcelona", 2021, 2022)],
+        "goles": 61, "asistencias": 170, "tarjetas": 210, "partidos": 995
+    },
+    "Mascherano": {
+        "carrera": [("West Ham", 2006, 2007), ("Liverpool", 2007, 2010), ("Barcelona", 2010, 2018)],
+        "goles": 8, "asistencias": 24, "tarjetas": 182, "partidos": 715
+    },
+    "De Bruyne": {
+        "carrera": [("Chelsea", 2012, 2014), ("Wolfsburg", 2014, 2015), ("Manchester City", 2015, 2026)],
+        "goles": 149, "asistencias": 252, "tarjetas": 58, "partidos": 685
+    },
+    "Haaland": {
+        "carrera": [("Salzburg", 2019, 2020), ("Dortmund", 2020, 2022), ("Manchester City", 2022, 2026)],
+        "goles": 255, "asistencias": 48, "tarjetas": 22, "partidos": 312
+    },
+    "David Silva": {
+        "carrera": [("Valencia", 2004, 2010), ("Manchester City", 2010, 2020), ("Real Sociedad", 2020, 2023)],
+        "goles": 125, "asistencias": 204, "tarjetas": 92, "partidos": 810
+    },
+    "Agüero": {
+        "carrera": [("Atletico", 2006, 2011), ("Manchester City", 2010, 2021), ("Barcelona", 2021, 2021)],
+        "goles": 426, "asistencias": 140, "tarjetas": 72, "partidos": 786
+    },
+    "Yaya Touré": {
+        "carrera": [("Monaco", 2006, 2007), ("Barcelona", 2007, 2010), ("Manchester City", 2010, 2018)],
+        "goles": 103, "asistencias": 71, "tarjetas": 102, "partidos": 660
+    },
+    "Tévez": {
+        "carrera": [("West Ham", 2006, 2007), ("Manchester United", 2007, 2009), ("Manchester City", 2009, 2013), ("Juventus", 2013, 2015)],
+        "goles": 308, "asistencias": 122, "tarjetas": 98, "partidos": 745
+    },
+    "Rooney": {
+        "carrera": [("Everton", 2002, 2004), ("Manchester United", 2004, 2017), ("Everton", 2017, 2018)],
+        "goles": 366, "asistencias": 188, "tarjetas": 141, "partidos": 884
+    },
+    "Pogba": {
+        "carrera": [("Manchester United", 2011, 2012), ("Juventus", 2012, 2016), ("Manchester United", 2016, 2022), ("Juventus", 2022, 2024)],
+        "goles": 91, "asistencias": 111, "tarjetas": 82, "partidos": 482
+    },
+    "Rashford": {
+        "carrera": [("Manchester United", 2015, 2026)],
+        "goles": 131, "asistencias": 68, "tarjetas": 28, "partidos": 402
+    },
+    "De Gea": {
+        "carrera": [("Atletico", 2009, 2011), ("Manchester United", 2011, 2023), ("Fiorentina", 2024, 2026)],
+        "goles": 0, "asistencias": 0, "tarjetas": 15, "partidos": 665
+    },
+    "Lewandowski": {
+        "carrera": [("Dortmund", 2010, 2014), ("Bayern", 2014, 2022), ("Barcelona", 2022, 2026)],
+        "goles": 625, "asistencias": 145, "tarjetas": 81, "partidos": 892
+    },
+    "Müller": {
+        "carrera": [("Bayern", 2008, 2026)],
+        "goles": 242, "asistencias": 268, "tarjetas": 42, "partidos": 707
+    },
+    "Robben": {
+        "carrera": [("Chelsea", 2004, 2007), ("Real Madrid", 2007, 2009), ("Bayern", 2009, 2019)],
+        "goles": 209, "asistencias": 165, "tarjetas": 62, "partidos": 614
+    },
+    "Ribéry": {
+        "carrera": [("Marseille", 2005, 2007), ("Bayern", 2007, 2019), ("Fiorentina", 2019, 2021)],
+        "goles": 151, "asistencias": 224, "tarjetas": 88, "partidos": 710
+    },
+    "Alaba": {
+        "carrera": [("Bayern", 2010, 2021), ("Hoffenheim", 2011, 2011), ("Real Madrid", 2021, 2026)],
+        "goles": 45, "asistencias": 71, "tarjetas": 34, "partidos": 612
+    },
+    "Lahm": {
+        "carrera": [("Bayern", 2001, 2017), ("Stuttgart", 2003, 2005)],
+        "goles": 22, "asistencias": 78, "tarjetas": 48, "partidos": 712
+    },
+    "Schweinsteiger": {
+        "carrera": [("Bayern", 2002, 2015), ("Manchester United", 2015, 2017)],
+        "goles": 86, "asistencias": 112, "tarjetas": 115, "partidos": 687
+    },
+    "Thiago": {
+        "carrera": [("Barcelona", 2009, 2013), ("Bayern", 2013, 2020), ("Liverpool", 2020, 2024)],
+        "goles": 48, "asistencias": 65, "tarjetas": 71, "partidos": 485
+    },
+    "Hazard": {
+        "carrera": [("Lille", 2007, 2012), ("Chelsea", 2012, 2019), ("Real Madrid", 2019, 2023)],
+        "goles": 167, "asistencias": 150, "tarjetas": 42, "partidos": 620
+    },
+    "Lampard": {
+        "carrera": [("Chelsea", 2001, 2014), ("Manchester City", 2014, 2015)],
+        "goles": 274, "asistencias": 182, "tarjetas": 98, "partidos": 915
+    },
+    "Terry": {
+        "carrera": [("Chelsea", 1998, 2017)],
+        "goles": 67, "asistencias": 28, "tarjetas": 124, "partidos": 759
+    },
+    "Drogba": {
+        "carrera": [("Marseille", 2003, 2004), ("Chelsea", 2004, 2012), ("Galatasaray", 2013, 2014), ("Chelsea", 2014, 2015)],
+        "goles": 302, "asistencias": 118, "tarjetas": 110, "partidos": 685
+    },
+    "Čech": {
+        "carrera": [("Rennes", 2002, 2004), ("Chelsea", 2004, 2015), ("Arsenal", 2015, 2019)],
+        "goles": 0, "asistencias": 0, "tarjetas": 12, "partidos": 780
+    },
+    "Fàbregas": {
+        "carrera": [("Arsenal", 2003, 2011), ("Barcelona", 2011, 2014), ("Chelsea", 2014, 2019), ("Monaco", 2019, 2022)],
+        "goles": 125, "asistencias": 215, "tarjetas": 118, "partidos": 830
+    },
+    "Henry": {
+        "carrera": [("Monaco", 1994, 1999), ("Juventus", 1999, 1999), ("Arsenal", 1999, 2007), ("Barcelona", 2007, 2010)],
+        "goles": 360, "asistencias": 190, "tarjetas": 51, "partidos": 791
+    },
+    "Ronaldinho": {
+        "carrera": [("PSG", 2001, 2003), ("Barcelona", 2003, 2008), ("Milan", 2008, 2011)],
+        "goles": 197, "asistencias": 162, "tarjetas": 68, "partidos": 542
+    },
+    "Eto'o": {
+        "carrera": [("Real Madrid", 1997, 2000), ("Mallorca", 2000, 2004), ("Barcelona", 2004, 2009), ("Inter", 2009, 2011), ("Chelsea", 2013, 2014), ("Everton", 2014, 2015)],
+        "goles": 362, "asistencias": 116, "tarjetas": 81, "partidos": 724
+    },
+    "Griezmann": {
+        "carrera": [("Real Sociedad", 2009, 2014), ("Atletico", 2014, 2019), ("Barcelona", 2019, 2021), ("Atletico", 2021, 2026)],
+        "goles": 242, "asistencias": 105, "tarjetas": 89, "partidos": 662
+    },
+    "Falcao": {
+        "carrera": [("Porto", 2009, 2011), ("Atletico", 2011, 2013), ("Monaco", 2013, 2019), ("Manchester United", 2014, 2015), ("Chelsea", 2015, 2016)],
+        "goles": 307, "asistencias": 51, "tarjetas": 64, "partidos": 585
+    },
+    "Godín": {
+        "carrera": [("Villarreal", 2007, 2010), ("Atletico", 2010, 2019), ("Inter", 2019, 2020)],
+        "goles": 38, "asistencias": 18, "tarjetas": 152, "partidos": 720
+    },
+    "Oblak": {
+        "carrera": [("Benfica", 2010, 2014), ("Atletico", 2014, 2026)],
+        "goles": 0, "asistencias": 0, "tarjetas": 12, "partidos": 482
+    },
+    "Diego Costa": {
+        "carrera": [("Atletico", 2010, 2014), ("Chelsea", 2014, 2017), ("Atletico", 2018, 2020)],
+        "goles": 188, "asistencias": 71, "tarjetas": 131, "partidos": 495
+    },
+    "Joaquín": {
+        "carrera": [("Real Betis", 2000, 2006), ("Valencia", 2006, 2011), ("Malaga", 2011, 2013), ("Fiorentina", 2013, 2015), ("Real Betis", 2015, 2023)],
+        "goles": 112, "asistencias": 142, "tarjetas": 68, "partidos": 912
+    },
+    "Fekir": {
+        "carrera": [("Lyon", 2013, 2019), ("Real Betis", 2019, 2024)],
+        "goles": 105, "asistencias": 78, "tarjetas": 71, "partidos": 395
+    },
+    "Canales": {
+        "carrera": [("Real Madrid", 2010, 2012), ("Valencia", 2011, 2014), ("Real Sociedad", 2014, 2018), ("Real Betis", 2018, 2023)],
+        "goles": 68, "asistencias": 74, "tarjetas": 58, "partidos": 492
+    },
+    "Isco": {
+        "carrera": [("Valencia", 2010, 2011), ("Malaga", 2011, 2013), ("Real Madrid", 2013, 2022), ("Sevilla", 2022, 2022), ("Real Betis", 2023, 2026)],
+        "goles": 82, "asistencias": 79, "tarjetas": 54, "partidos": 520
+    },
+    "Bellerín": {
+        "carrera": [("Arsenal", 2013, 2022), ("Real Betis", 2021, 2022), ("Barcelona", 2022, 2023), ("Real Betis", 2023, 2026)],
+        "goles": 15, "asistencias": 42, "tarjetas": 41, "partidos": 380
+    },
+    "Jesús Navas": {
+        "carrera": [("Sevilla", 2003, 2013), ("Manchester City", 2013, 2017), ("Sevilla", 2017, 2026)],
+        "goles": 39, "asistencias": 160, "tarjetas": 89, "partidos": 890
+    },
+    "Rakitic": {
+        "carrera": [("Schalke", 2007, 2011), ("Sevilla", 2011, 2014), ("Barcelona", 2014, 2020), ("Sevilla", 2020, 2024)],
+        "goles": 121, "asistencias": 150, "tarjetas": 115, "partidos": 812
+    },
+    "Banega": {
+        "carrera": [("Valencia", 2008, 2014), ("Atletico", 2008, 2009), ("Sevilla", 2014, 2016), ("Inter", 2016, 2017), ("Sevilla", 2017, 2020)],
+        "goles": 48, "asistencias": 82, "tarjetas": 151, "partidos": 598
+    },
+    "Luuk de Jong": {
+        "carrera": [("Monchengladbach", 2012, 2014), ("PSV", 2014, 2019), ("Sevilla", 2019, 2022), ("Barcelona", 2021, 2022), ("PSV", 2022, 2026)],
+        "goles": 224, "asistencias": 78, "tarjetas": 42, "partidos": 580
+    }
 }
 
 
 # --- CONTROL DE TEMPORADAS AUTOMÁTICAS (20 DÍAS) ---
 
 def actualizar_y_obtener_temporada():
-    """Comprueba el estado de la temporada actual y maneja el reinicio cada 20 días."""
     tz = ZoneInfo("Europe/Madrid")
     hoy = datetime.datetime.now(tz).date()
     
-    # Intentamos obtener la temporada más reciente
     temporada_activa = Temporada.query.order_by(Temporada.id.desc()).first()
     
-    # Si no existe ninguna, inicializamos la Temporada 1 hoy mismo
     if not temporada_activa:
         temporada_activa = Temporada(numero=1, fecha_inicio=hoy)
         db.session.add(temporada_activa)
         db.session.commit()
         
-    # Calcular días transcurridos desde que empezó la temporada activa
     dias_transcurridos = (hoy - temporada_activa.fecha_inicio).days
     
-    # Si han transcurrido 20 días o más, finaliza la temporada e iniciamos la siguiente
     if dias_transcurridos >= 20:
         nueva_temporada = Temporada(
             numero=temporada_activa.numero + 1,
@@ -150,8 +343,6 @@ def actualizar_y_obtener_temporada():
         )
         db.session.add(nueva_temporada)
         
-        # Resetear los marcadores de temporada de todos los usuarios
-        # Nota: "puntos_general" y "partidas_jugadas" históricas no se tocan
         usuarios = User.query.all()
         for usuario in usuarios:
             usuario.puntos_temporada = 0
@@ -163,6 +354,14 @@ def actualizar_y_obtener_temporada():
         
     dias_restantes = 20 - dias_transcurridos
     return temporada_activa.numero, dias_restantes
+
+
+# --- CONTROL DE ALTERNANCIA DIARIA ---
+
+def obtener_tipo_juego_hoy(fecha_juego):
+    """Alterna el juego: días pares 'grid' (Cuadrícula), días impares 'ordenar'."""
+    # toordinal() da un número único para cada día de la historia de la humanidad
+    return "grid" if fecha_juego.toordinal() % 2 == 0 else "ordenar"
 
 
 # --- LÓGICA DE CONTROL DE CICLO DIARIO (11:00 AM) ---
@@ -186,6 +385,8 @@ def compartieron_club(carrera1, carrera2):
                     return True
     return False
 
+
+# --- GENERADOR JUEGO 1: CUADRÍCULA ---
 def obtener_juego_del_dia(fecha_juego):
     hoy_str = fecha_juego.strftime('%Y%m%d')
     semilla = int(hoy_str)
@@ -210,7 +411,8 @@ def obtener_juego_del_dia(fecha_juego):
             random.shuffle(posibles_companeros)
             
             for p2 in posibles_companeros:
-                if compartieron_club(JUGADORES_DB[p1], JUGADORES_DB[p2]):
+                # Comparamos la clave de carrera interna
+                if compartieron_club(JUGADORES_DB[p1]["carrera"], JUGADORES_DB[p2]["carrera"]):
                     parejas_seleccionadas.append((p1, p2))
                     jugadores_seleccionados.add(p1)
                     jugadores_seleccionados.add(p2)
@@ -230,11 +432,45 @@ def obtener_juego_del_dia(fecha_juego):
         for j in range(i + 1, len(jugadores_hoy)):
             u1 = jugadores_hoy[i]
             u2 = jugadores_hoy[j]
-            if compartieron_club(JUGADORES_DB[u1], JUGADORES_DB[u2]):
+            if compartieron_club(JUGADORES_DB[u1]["carrera"], JUGADORES_DB[u2]["carrera"]):
                 conexiones_hoy.append((u1, u2))
                 
     conexiones_hoy = list(set(conexiones_hoy))
     return jugadores_hoy, conexiones_hoy
+
+
+# --- GENERADOR JUEGO 2: ORDENAR ---
+def obtener_juego_ordenar(fecha_juego):
+    hoy_str = fecha_juego.strftime('%Y%m%d')
+    semilla = int(hoy_str)
+    random.seed(semilla)
+    
+    # 1. Elegimos 10 jugadores aleatorios estables para hoy
+    pool_jugadores = list(JUGADORES_DB.keys())
+    jugadores_hoy = random.sample(pool_jugadores, 10)
+    
+    # 2. Elegimos la métrica al azar para hoy
+    metricas = ["goles", "asistencias", "tarjetas", "partidos"]
+    metrica_seleccionada = random.choice(metricas)
+    
+    # Mapeo para mostrar nombres bonitos en el HTML
+    titulos_metrica = {
+        "goles": "Goles en su Carrera ⚽",
+        "asistencias": "Asistencias de Gol 🎯",
+        "tarjetas": "Tarjetas Amarillas Recibidas 🟨",
+        "partidos": "Partidos Oficiales Disputados 🏟️"
+    }
+    titulo_bonito = titulos_metrica[metrica_seleccionada]
+    
+    # 3. Solución correcta ordenada de MAYOR a MENOR basándose en la métrica
+    solucion_ordenada = sorted(jugadores_hoy, key=lambda p: JUGADORES_DB[p][metrica_seleccionada], reverse=True)
+    
+    # 4. Mezclamos los jugadores para mostrárselos desordenados al usuario
+    random.seed()
+    jugadores_desordenados = list(jugadores_hoy)
+    random.shuffle(jugadores_desordenados)
+    
+    return jugadores_desordenados, titulo_bonito, solucion_ordenada, metrica_seleccionada
 
 
 # --- RUTAS ---
@@ -242,7 +478,6 @@ def obtener_juego_del_dia(fecha_juego):
 @app.route('/')
 @login_required
 def index():
-    # Comprobar si hay reinicio de temporada automatizado
     num_temporada, dias_restantes = actualizar_y_obtener_temporada()
 
     if current_user.username == 'admin':
@@ -252,9 +487,7 @@ def index():
         bloqueado_hora = False
         ha_jugado_hoy = False
     elif current_user.grupo_id:
-        # Obtenemos la clasificación de la temporada (ordenada por puntos_temporada)
         usuarios_temporada = User.query.filter_by(grupo_id=current_user.grupo_id).filter(User.username != 'admin').order_by(User.puntos_temporada.desc()).all()
-        # Obtenemos la clasificación histórica general (ordenada por puntos_general)
         usuarios_general = User.query.filter_by(grupo_id=current_user.grupo_id).filter(User.username != 'admin').order_by(User.puntos_general.desc()).all()
         
         nombre_grupo = current_user.grupo.nombre
@@ -285,29 +518,46 @@ def index():
 @login_required
 def jugar():
     if current_user.username == 'admin':
-        flash("El administrador no puede participar en las partidas de juego.", "error")
+        flash("El administrador no puede participar en las partidas.", "error")
         return redirect(url_for('index'))
 
     fecha_activa = obtener_fecha_juego_actual()
     
     if current_user.ultimo_juego_fecha == fecha_activa:
-        flash("Ya has participado en el reto activo. ¡Vuelve cuando se abra el siguiente!", "error")
+        flash("Ya has participado en el reto activo. ¡Vuelve mañana!", "error")
         return redirect(url_for('index'))
 
-    jugadores_hoy, conexiones_hoy = obtener_juego_del_dia(fecha_activa)
+    # Determinar qué minijuego toca hoy según alternancia diaria
+    tipo_juego = obtener_tipo_juego_hoy(fecha_activa)
 
-    random.seed()
-    jugadores_mezclados = list(jugadores_hoy)
-    random.shuffle(jugadores_mezclados)
-
-    return render_template('jugar.html', jugadores=jugadores_mezclados, conexiones=conexiones_hoy)
+    if tipo_juego == "grid":
+        # JUEGO 1: Cuadrícula de parejas
+        jugadores_hoy, conexiones_hoy = obtener_juego_del_dia(fecha_activa)
+        random.seed()
+        jugadores_mezclados = list(jugadores_hoy)
+        random.shuffle(jugadores_mezclados)
+        return render_template('jugar.html', jugadores=jugadores_mezclados, conexiones=conexiones_hoy)
+    else:
+        # JUEGO 2: Ordenar jugadores
+        jugadores_desordenados, titulo_bonito, solucion_ordenada, metrica = obtener_juego_ordenar(fecha_activa)
+        
+        # Guardamos en un diccionario el valor real de cada jugador para que JS pueda consultarlo si falla o acierta
+        valores_reales = {p: JUGADORES_DB[p][metrica] for p in jugadores_desordenados}
+        
+        return render_template(
+            'ordenar.html', 
+            jugadores=jugadores_desordenados, 
+            titulo_bonito=titulo_bonito, 
+            solucion=solucion_ordenada,
+            valores_reales=valores_reales
+        )
 
 
 @app.route('/guardar_puntuacion', methods=['POST'])
 @login_required
 def guardar_puntuacion():
     if current_user.username == 'admin':
-        return jsonify({"status": "error", "message": "El administrador no guarda puntuación"}), 400
+        return jsonify({"status": "error", "message": "El admin no puntúa"}), 400
 
     fecha_activa = obtener_fecha_juego_actual()
     
@@ -317,19 +567,23 @@ def guardar_puntuacion():
     datos = request.get_json()
     segundos = datos.get('segundos', 9999)
     completado = datos.get('completado', False)
+    puntos_enviados = datos.get('puntos')  # Capturamos los puntos de precisión si existen
 
     if completado:
-        puntos_obtenidos = max(100, 1000 - segundos) 
-        # Sumar a la temporada actual
+        # Si el juego de ordenar envía los puntos calculados por error, los usamos.
+        # Si no, calculamos por tiempo (juego de cuadrícula).
+        if puntos_enviados is not None:
+            puntos_obtenidos = puntos_enviados
+        else:
+            puntos_obtenidos = max(100, 1000 - segundos) 
+            
         current_user.puntos_temporada += puntos_obtenidos
-        # Sumar al histórico general
         current_user.puntos_general += puntos_obtenidos
-        
         current_user.ultimo_juego_fecha = fecha_activa
         current_user.partidas_jugadas += 1
         db.session.commit()
         
-        flash(f"¡Reto completado en {segundos} segundos! Sumas {puntos_obtenidos} puntos.", "success")
+        flash(f"¡Reto completado! Sumas {puntos_obtenidos} puntos.", "success")
         return jsonify({"status": "ok"})
     
     return jsonify({"status": "error", "message": "Datos inválidos"}), 400
@@ -358,7 +612,6 @@ def crear_grupo():
 @app.route('/reset_clasificacion', methods=['POST'])
 @login_required
 def reset_clasificacion():
-    """El administrador puede resetear la temporada de forma manual si lo desea."""
     if current_user.username != 'admin':
         flash("No tienes permisos de administrador.", "error")
         return redirect(url_for('index'))
@@ -367,9 +620,8 @@ def reset_clasificacion():
     for usuario in usuarios:
         usuario.puntos_temporada = 0
         usuario.ultimo_juego_fecha = None
-        # Las partidas jugadas y el puntos_general se mantienen en el reset de temporada
+        usuario.partidas_jugadas = 0
     
-    # También forzamos el reinicio de la fecha de la temporada activa a hoy
     temporada_activa = Temporada.query.order_by(Temporada.id.desc()).first()
     if temporada_activa:
         tz = ZoneInfo("Europe/Madrid")

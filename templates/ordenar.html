@@ -1,0 +1,186 @@
+{% extends 'base.html' %}
+{% block content %}
+<div class="space-y-4">
+    
+    <!-- PANTALLA DE INSTRUCCIONES INICIAL (Lobby) -->
+    <div id="lobby-juego" class="bg-white p-6 rounded-lg shadow-md text-center space-y-4">
+        <h2 class="text-xl font-bold text-gray-800">📊 Reto: Clasificación Histórica</h2>
+        <div class="p-4 bg-gray-50 rounded-lg text-left text-xs text-gray-600 space-y-2 leading-relaxed">
+            <p><strong>Reglas del juego:</strong></p>
+            <p>• Tienes una lista desordenada de <strong>10 futbolistas</strong>.</p>
+            <p>• Ordénalos de <strong>mayor a menor</strong> según la métrica indicada arriba.</p>
+            <p>• Usa los botones `▲` y `▼` para cambiar las posiciones.</p>
+            <p>• ⚠️ <strong>IMPORTANTE: Solo tienes UN INTENTO</strong>. El tiempo no afecta a tus puntos, tómate los minutos que necesites para asegurar el orden.</p>
+            <p>• <strong>Puntuación</strong>: Respuesta perfecta = 1000 pts. Por cada desviación de puesto en la lista final, perderás 18 pts (Mínimo: 100 pts por participar).</p>
+        </div>
+        <button onclick="empezarJuego()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow transition duration-200">
+            Iniciar Desafío 📊
+        </button>
+    </div>
+
+    <!-- CONTENEDOR DEL JUEGO (Oculto al inicio) -->
+    <div id="contenedor-juego" class="space-y-4 hidden">
+        <div class="bg-white p-4 rounded-lg shadow flex justify-between items-center">
+            <div>
+                <h2 class="font-bold text-gray-800 text-sm">PlayedTogether?</h2>
+                <p class="text-[11px] text-gray-500">Ordena de **mayor a menor** según:</p>
+                <span class="text-xs bg-emerald-100 text-emerald-800 font-bold px-2 py-1 rounded-full mt-1 inline-block">
+                    {{ titulo_bonito }}
+                </span>
+            </div>
+            <div class="text-right">
+                <span class="text-xs text-gray-500 block">Tiempo</span>
+                <span id="cronometro" class="text-2xl font-mono font-bold text-emerald-600">0s</span>
+            </div>
+        </div>
+
+        <div id="lista-ordenar" class="space-y-2 bg-gray-200 p-2 rounded-lg">
+            {% for jugador in jugadores %}
+                <div class="jugador-item bg-white p-3 rounded-lg shadow flex justify-between items-center transition duration-150" 
+                     data-nombre="{{ jugador }}">
+                    
+                    <div class="flex items-center gap-3">
+                        <span class="posicion font-bold text-gray-400 text-sm w-5"></span>
+                        <span class="font-bold text-gray-800 text-sm">{{ jugador }}</span>
+                        <span class="dato-real text-xs text-emerald-600 font-bold hidden"></span>
+                    </div>
+
+                    <div class="flex gap-1 botonera">
+                        <button onclick="mover('subir', this)" class="bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold p-2 rounded-lg text-sm w-9 h-9 flex items-center justify-center shadow-sm">
+                            ▲
+                        </button>
+                        <button onclick="mover('bajar', this)" class="bg-gray-100 hover:bg-gray-200 text-gray-600 font-bold p-2 rounded-lg text-sm w-9 h-9 flex items-center justify-center shadow-sm">
+                            ▼
+                        </button>
+                    </div>
+
+                </div>
+            {% endfor %}
+        </div>
+
+        <div id="mensaje-estado" class="text-xs text-center text-gray-500 font-medium h-4"></div>
+
+        <div class="text-center">
+            <button id="btn-enviar" onclick="enviarRespuestas()" class="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 px-2 rounded-lg shadow transition duration-200">
+                Enviar Respuestas 📤
+            </button>
+        </div>
+    </div>
+
+</div>
+
+<script>
+    const solucionCorrecta = {{ solucion | tojson }};
+    const valoresReales = {{ valores_reales | tojson }};
+    
+    let segundos = 0;
+    let intervaloCronometro;
+
+    function empezarJuego() {
+        document.getElementById('lobby-juego').classList.add('hidden');
+        document.getElementById('contenedor-juego').classList.remove('hidden');
+        iniciarCronometro();
+    }
+
+    function iniciarCronometro() {
+        clearInterval(intervaloCronometro);
+        segundos = 0;
+        document.getElementById('cronometro').innerText = "0s";
+        intervaloCronometro = setInterval(() => {
+            segundos++;
+            document.getElementById('cronometro').innerText = segundos + "s";
+        }, 1000);
+    }
+
+    function actualizarNumerosDePosicion() {
+        const items = document.querySelectorAll('.jugador-item');
+        items.forEach((item, index) => {
+            item.querySelector('.posicion').innerText = `#${index + 1}`;
+        });
+    }
+
+    actualizarNumerosDePosicion();
+
+    function mover(direccion, boton) {
+        const itemActual = boton.closest('.jugador-item');
+        const lista = document.getElementById('lista-ordenar');
+        
+        if (direccion === 'subir') {
+            const itemAnterior = itemActual.previousElementSibling;
+            if (itemAnterior) {
+                lista.insertBefore(itemActual, itemAnterior);
+            }
+        } else {
+            const itemSiguiente = itemActual.nextElementSibling;
+            if (itemSiguiente) {
+                lista.insertBefore(itemActual, itemSiguiente.nextElementSibling);
+            }
+        }
+        actualizarNumerosDePosicion();
+    }
+
+    // EVALUACIÓN POR PRECISIÓN (Intento Único)
+    function enviarRespuestas() {
+        clearInterval(intervaloCronometro);
+        
+        // Bloquear todos los botones para que no sigan moviendo
+        document.querySelectorAll('button').forEach(btn => btn.disabled = true);
+        document.querySelectorAll('.botonera').forEach(div => div.classList.add('hidden'));
+
+        const items = document.querySelectorAll('.jugador-item');
+        let errorTotal = 0;
+
+        // Calcular error absoluto de posiciones
+        items.forEach((item, index) => {
+            const nombre = item.getAttribute('data-nombre');
+            
+            // Posición real (0-9) en la solución
+            const posicionReal = solucionCorrecta.indexOf(nombre);
+            // Posición elegida por el usuario (0-9)
+            const posicionUsuario = index;
+
+            // La desviación absoluta se suma al error total
+            errorTotal += Math.abs(posicionReal - posicionUsuario);
+        });
+
+        // Puntos: 1000 base, restamos 18 puntos por cada posición de error. Mínimo 100.
+        const puntosObtenidos = Math.max(100, 1000 - (errorTotal * 18));
+
+        const mensajeDiv = document.getElementById('mensaje-estado');
+        mensajeDiv.innerText = `¡Intento enviado! Desviación total: ${errorTotal}. Sumas ${puntosObtenidos} puntos.`;
+        mensajeDiv.className = "text-sm text-center text-emerald-600 font-bold h-4";
+
+        // Mostrar los valores reales en cada tarjeta para que vean en qué fallaron
+        items.forEach(item => {
+            item.classList.add('bg-gray-50', 'border', 'border-gray-200');
+            const nombre = item.getAttribute('data-nombre');
+            const datoSpan = item.querySelector('.dato-real');
+            datoSpan.innerText = `(${valoresReales[nombre]})`;
+            datoSpan.classList.remove('hidden');
+        });
+
+        // Esperar 3 segundos para que analicen los resultados antes de redirigir
+        setTimeout(() => {
+            fetch('/guardar_puntuacion', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                },
+                body: JSON.stringify({
+                    segundos: segundos,
+                    completado: true,
+                    puntos: puntosObtenidos // Enviamos los puntos de precisión calculados
+                })
+            })
+            .then(response => response.json())
+            .then(data => {
+                window.location.href = "{{ url_for('index') }}";
+            })
+            .catch((error) => {
+                console.error('Error:', error);
+                alert("Error de conexión al guardar puntuación.");
+            });
+        }, 3500);
+    }
+</script>
+{% endblock %}
