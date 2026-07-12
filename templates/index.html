@@ -182,13 +182,18 @@
     }
 </script>
 
-<!-- SCRIPT DEL CRONÓMETRO DE ESPERA -->
+<!-- SCRIPT DEL CRONÓMETRO DE ESPERA (CORREGIDO) -->
 {% if bloqueado_hora %}
 <script>
     function actualizarCronometro() {
         const ahora = new Date();
         const destino = new Date();
         destino.setHours(11, 0, 0, 0);
+        
+        // CORRECCIÓN: Si ya pasaron las 11:00 AM de hoy, el siguiente reto se abre mañana a las 11:00 AM
+        if (ahora > destino) {
+            destino.setDate(destino.getDate() + 1);
+        }
         
         const diferencia = destino - ahora;
         
