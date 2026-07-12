@@ -30,22 +30,28 @@ class Grupo(db.Model):
     nombre = db.Column(db.String(50), unique=True, nullable=False)
     usuarios = db.relationship('User', backref='grupo', lazy=True)
 
+class Temporada(db.Model):
+    id = db.Column(db.Integer, primary_key=True)
+    numero = db.Column(db.Integer, default=1)
+    fecha_inicio = db.Column(db.Date, nullable=False)
+
 class User(UserMixin, db.Model):
     id = db.Column(db.Integer, primary_key=True)
     username = db.Column(db.String(50), unique=True, nullable=False)
     password_hash = db.Column(db.String(128), nullable=False)
     puntos_temporada = db.Column(db.Integer, default=0)
+    # NUEVO: Almacenar puntos históricos acumulados de todas las temporadas
+    puntos_general = db.Column(db.Integer, default=0)
     ultimo_juego_fecha = db.Column(db.Date, nullable=True)
-    grupo_id = db.Column(db.Integer, db.ForeignKey('grupo.id'), nullable=True)
-    # NUEVO: Almacenar la cantidad de partidas jugadas en la temporada
     partidas_jugadas = db.Column(db.Integer, default=0)
+    grupo_id = db.Column(db.Integer, db.ForeignKey('grupo.id'), nullable=True)
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-# --- BASE DE DATOS AUTOMÁTICA DE TRAYECTORIAS ---
+# --- BASE DE DATOS AUTOMÁTICA DE TRAYECTORIAS (64 JUGADORES) ---
 
 JUGADORES_DB = {
     "Messi": [("Barcelona", 2004, 2021), ("PSG", 2021, 2023), ("Inter Miami", 2023, 2026)],
@@ -117,6 +123,48 @@ JUGADORES_DB = {
 }
 
 
+# --- CONTROL DE TEMPORADAS AUTOMÁTICAS (20 DÍAS) ---
+
+def actualizar_y_obtener_temporada():
+    """Comprueba el estado de la temporada actual y maneja el reinicio cada 20 días."""
+    tz = ZoneInfo("Europe/Madrid")
+    hoy = datetime.datetime.now(tz).date()
+    
+    # Intentamos obtener la temporada más reciente
+    temporada_activa = Temporada.query.order_by(Temporada.id.desc()).first()
+    
+    # Si no existe ninguna, inicializamos la Temporada 1 hoy mismo
+    if not temporada_activa:
+        temporada_activa = Temporada(numero=1, fecha_inicio=hoy)
+        db.session.add(temporada_activa)
+        db.session.commit()
+        
+    # Calcular días transcurridos desde que empezó la temporada activa
+    dias_transcurridos = (hoy - temporada_activa.fecha_inicio).days
+    
+    # Si han transcurrido 20 días o más, finaliza la temporada e iniciamos la siguiente
+    if dias_transcurridos >= 20:
+        nueva_temporada = Temporada(
+            numero=temporada_activa.numero + 1,
+            fecha_inicio=hoy
+        )
+        db.session.add(nueva_temporada)
+        
+        # Resetear los marcadores de temporada de todos los usuarios
+        # Nota: "puntos_general" y "partidas_jugadas" históricas no se tocan
+        usuarios = User.query.all()
+        for usuario in usuarios:
+            usuario.puntos_temporada = 0
+            usuario.ultimo_juego_fecha = None
+            
+        db.session.commit()
+        temporada_activa = nueva_temporada
+        dias_transcurridos = 0
+        
+    dias_restantes = 20 - dias_transcurridos
+    return temporada_activa.numero, dias_restantes
+
+
 # --- LÓGICA DE CONTROL DE CICLO DIARIO (11:00 AM) ---
 
 def obtener_fecha_juego_actual():
@@ -127,6 +175,16 @@ def obtener_fecha_juego_actual():
         return (ahora - datetime.timedelta(days=1)).date()
     else:
         return ahora.date()
+
+def compartieron_club(carrera1, carrera2):
+    for club1, entrada1, salida1 in carrera1:
+        for club2, entrada2, salida2 in carrera2:
+            if club1 == club2:
+                inicio_comun = max(entrada1, entrada2)
+                fin_comun = min(salida1, salida2)
+                if inicio_comun <= fin_comun:
+                    return True
+    return False
 
 def obtener_juego_del_dia(fecha_juego):
     hoy_str = fecha_juego.strftime('%Y%m%d')
@@ -184,26 +242,43 @@ def obtener_juego_del_dia(fecha_juego):
 @app.route('/')
 @login_required
 def index():
+    # Comprobar si hay reinicio de temporada automatizado
+    num_temporada, dias_restantes = actualizar_y_obtener_temporada()
+
     if current_user.username == 'admin':
-        usuarios = User.query.filter(User.username != 'admin').all()
+        usuarios_temporada = User.query.filter(User.username != 'admin').all()
+        usuarios_general = User.query.filter(User.username != 'admin').all()
         nombre_grupo = "Administración (Ver todo)"
         bloqueado_hora = False
         ha_jugado_hoy = False
     elif current_user.grupo_id:
-        usuarios = User.query.filter_by(grupo_id=current_user.grupo_id).filter(User.username != 'admin').order_by(User.puntos_temporada.desc()).all()
+        # Obtenemos la clasificación de la temporada (ordenada por puntos_temporada)
+        usuarios_temporada = User.query.filter_by(grupo_id=current_user.grupo_id).filter(User.username != 'admin').order_by(User.puntos_temporada.desc()).all()
+        # Obtenemos la clasificación histórica general (ordenada por puntos_general)
+        usuarios_general = User.query.filter_by(grupo_id=current_user.grupo_id).filter(User.username != 'admin').order_by(User.puntos_general.desc()).all()
+        
         nombre_grupo = current_user.grupo.nombre
         
         fecha_activa = obtener_fecha_juego_actual()
         ha_jugado_hoy = (current_user.ultimo_juego_fecha == fecha_activa)
-        
         bloqueado_hora = ha_jugado_hoy
     else:
-        usuarios = []
+        usuarios_temporada = []
+        usuarios_general = []
         nombre_grupo = "Ninguno (Sin asignar)"
         bloqueado_hora = False
         ha_jugado_hoy = False
         
-    return render_template('index.html', usuarios=usuarios, nombre_grupo=nombre_grupo, bloqueado_hora=bloqueado_hora, ha_jugado_hoy=ha_jugado_hoy)
+    return render_template(
+        'index.html', 
+        usuarios_temporada=usuarios_temporada, 
+        usuarios_general=usuarios_general, 
+        nombre_grupo=nombre_grupo, 
+        bloqueado_hora=bloqueado_hora, 
+        ha_jugado_hoy=ha_jugado_hoy,
+        num_temporada=num_temporada,
+        dias_restantes=dias_restantes
+    )
 
 
 @app.route('/jugar')
@@ -227,16 +302,6 @@ def jugar():
 
     return render_template('jugar.html', jugadores=jugadores_mezclados, conexiones=conexiones_hoy)
 
-def compartieron_club(carrera1, carrera2):
-    for club1, entrada1, salida1 in carrera1:
-        for club2, entrada2, salida2 in carrera2:
-            if club1 == club2:
-                inicio_comun = max(entrada1, entrada2)
-                fin_comun = min(salida1, salida2)
-                if inicio_comun <= fin_comun:
-                    return True
-    return False
-
 
 @app.route('/guardar_puntuacion', methods=['POST'])
 @login_required
@@ -255,9 +320,12 @@ def guardar_puntuacion():
 
     if completado:
         puntos_obtenidos = max(100, 1000 - segundos) 
+        # Sumar a la temporada actual
         current_user.puntos_temporada += puntos_obtenidos
+        # Sumar al histórico general
+        current_user.puntos_general += puntos_obtenidos
+        
         current_user.ultimo_juego_fecha = fecha_activa
-        # INCREMENTAR PARTIDAS JUGADAS
         current_user.partidas_jugadas += 1
         db.session.commit()
         
@@ -290,6 +358,7 @@ def crear_grupo():
 @app.route('/reset_clasificacion', methods=['POST'])
 @login_required
 def reset_clasificacion():
+    """El administrador puede resetear la temporada de forma manual si lo desea."""
     if current_user.username != 'admin':
         flash("No tienes permisos de administrador.", "error")
         return redirect(url_for('index'))
@@ -298,10 +367,16 @@ def reset_clasificacion():
     for usuario in usuarios:
         usuario.puntos_temporada = 0
         usuario.ultimo_juego_fecha = None
-        # RESETEAR PARTIDAS JUGADAS
-        usuario.partidas_jugadas = 0
+        # Las partidas jugadas y el puntos_general se mantienen en el reset de temporada
+    
+    # También forzamos el reinicio de la fecha de la temporada activa a hoy
+    temporada_activa = Temporada.query.order_by(Temporada.id.desc()).first()
+    if temporada_activa:
+        tz = ZoneInfo("Europe/Madrid")
+        temporada_activa.fecha_inicio = datetime.datetime.now(tz).date()
+        
     db.session.commit()
-    flash("La clasificación general ha sido reiniciada a 0.", "success")
+    flash("La clasificación de la temporada actual ha sido reiniciada.", "success")
     return redirect(url_for('index'))
 
 
