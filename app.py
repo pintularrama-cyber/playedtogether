@@ -37,13 +37,15 @@ class User(UserMixin, db.Model):
     puntos_temporada = db.Column(db.Integer, default=0)
     ultimo_juego_fecha = db.Column(db.Date, nullable=True)
     grupo_id = db.Column(db.Integer, db.ForeignKey('grupo.id'), nullable=True)
+    # NUEVO: Almacenar la cantidad de partidas jugadas en la temporada
+    partidas_jugadas = db.Column(db.Integer, default=0)
 
 @login_manager.user_loader
 def load_user(user_id):
     return User.query.get(int(user_id))
 
 
-# --- BASE DE DATOS AUTOMÁTICA DE TRAYECTORIAS (64 JUGADORES) ---
+# --- BASE DE DATOS AUTOMÁTICA DE TRAYECTORIAS ---
 
 JUGADORES_DB = {
     "Messi": [("Barcelona", 2004, 2021), ("PSG", 2021, 2023), ("Inter Miami", 2023, 2026)],
@@ -98,22 +100,16 @@ JUGADORES_DB = {
     "Henry": [("Monaco", 1994, 1999), ("Juventus", 1999, 1999), ("Arsenal", 1999, 2007), ("Barcelona", 2007, 2010)],
     "Ronaldinho": [("PSG", 2001, 2003), ("Barcelona", 2003, 2008), ("Milan", 2008, 2011)],
     "Eto'o": [("Real Madrid", 1997, 2000), ("Mallorca", 2000, 2004), ("Barcelona", 2004, 2009), ("Inter", 2009, 2011), ("Chelsea", 2013, 2014), ("Everton", 2014, 2015)],
-
-    # --- NUEVOS: ATLÉTICO DE MADRID ---
     "Griezmann": [("Real Sociedad", 2009, 2014), ("Atletico", 2014, 2019), ("Barcelona", 2019, 2021), ("Atletico", 2021, 2026)],
     "Falcao": [("Porto", 2009, 2011), ("Atletico", 2011, 2013), ("Monaco", 2013, 2019), ("Manchester United", 2014, 2015), ("Chelsea", 2015, 2016)],
     "Godín": [("Villarreal", 2007, 2010), ("Atletico", 2010, 2019), ("Inter", 2019, 2020)],
     "Oblak": [("Benfica", 2010, 2014), ("Atletico", 2014, 2026)],
     "Diego Costa": [("Atletico", 2010, 2014), ("Chelsea", 2014, 2017), ("Atletico", 2018, 2020)],
-
-    # --- NUEVOS: REAL BETIS ---
     "Joaquín": [("Real Betis", 2000, 2006), ("Valencia", 2006, 2011), ("Malaga", 2011, 2013), ("Fiorentina", 2013, 2015), ("Real Betis", 2015, 2023)],
     "Fekir": [("Lyon", 2013, 2019), ("Real Betis", 2019, 2024)],
     "Canales": [("Real Madrid", 2010, 2012), ("Valencia", 2011, 2014), ("Real Sociedad", 2014, 2018), ("Real Betis", 2018, 2023)],
     "Isco": [("Valencia", 2010, 2011), ("Malaga", 2011, 2013), ("Real Madrid", 2013, 2022), ("Sevilla", 2022, 2022), ("Real Betis", 2023, 2026)],
     "Bellerín": [("Arsenal", 2013, 2022), ("Real Betis", 2021, 2022), ("Barcelona", 2022, 2023), ("Real Betis", 2023, 2026)],
-
-    # --- NUEVOS: SEVILLA FC ---
     "Jesús Navas": [("Sevilla", 2003, 2013), ("Manchester City", 2013, 2017), ("Sevilla", 2017, 2026)],
     "Rakitic": [("Schalke", 2007, 2011), ("Sevilla", 2011, 2014), ("Barcelona", 2014, 2020), ("Sevilla", 2020, 2024)],
     "Banega": [("Valencia", 2008, 2014), ("Atletico", 2008, 2009), ("Sevilla", 2014, 2016), ("Inter", 2016, 2017), ("Sevilla", 2017, 2020)],
@@ -124,12 +120,9 @@ JUGADORES_DB = {
 # --- LÓGICA DE CONTROL DE CICLO DIARIO (11:00 AM) ---
 
 def obtener_fecha_juego_actual():
-    """Retorna la fecha del tablero que está activo en este momento."""
     tz = ZoneInfo("Europe/Madrid")
     ahora = datetime.datetime.now(tz)
     
-    # Si aún no son las 11:00 AM de hoy, el tablero de hoy todavía no se ha abierto,
-    # por lo tanto, el tablero activo sigue siendo el de ayer.
     if ahora.time() < time(11, 0):
         return (ahora - datetime.timedelta(days=1)).date()
     else:
@@ -141,8 +134,6 @@ def obtener_juego_del_dia(fecha_juego):
     
     pool_jugadores = list(JUGADORES_DB.keys())
     
-    # Intentamos emparejar dinámicamente. Si falla por callejón sin salida, 
-    # sumamos un intento a la semilla para cambiar el orden de mezcla y reintentar.
     intentos = 0
     while intentos < 100:
         random.seed(semilla + intentos)
@@ -157,9 +148,7 @@ def obtener_juego_del_dia(fecha_juego):
             if p1 in jugadores_seleccionados:
                 continue
             
-            # Buscar un compañero válido que aún no esté seleccionado
             posibles_companeros = [p for p in jugadores_disponibles if p != p1 and p not in jugadores_seleccionados]
-            # Barajamos los candidatos para que la pareja de p1 no sea siempre la misma
             random.shuffle(posibles_companeros)
             
             for p2 in posibles_companeros:
@@ -172,14 +161,12 @@ def obtener_juego_del_dia(fecha_juego):
             if len(parejas_seleccionadas) == 8:
                 break
         
-        # Si logramos formar las 8 parejas perfectas, salimos del bucle principal
         if len(parejas_seleccionadas) == 8:
             break
         intentos += 1
         
     jugadores_hoy = list(jugadores_seleccionados)
     
-    # Calculamos todas las conexiones cruzadas alternativas posibles entre estos 16
     conexiones_hoy = []
     for i in range(len(jugadores_hoy)):
         for j in range(i + 1, len(jugadores_hoy)):
@@ -206,12 +193,9 @@ def index():
         usuarios = User.query.filter_by(grupo_id=current_user.grupo_id).filter(User.username != 'admin').order_by(User.puntos_temporada.desc()).all()
         nombre_grupo = current_user.grupo.nombre
         
-        # --- NUEVA LÓGICA DE ACCESO ---
         fecha_activa = obtener_fecha_juego_actual()
-        # El usuario está bloqueado SOLO si ya jugó la fecha del tablero que está activo hoy
         ha_jugado_hoy = (current_user.ultimo_juego_fecha == fecha_activa)
         
-        # El cronómetro se muestra solo si ya ha jugado el reto activo y tiene que esperar al de mañana
         bloqueado_hora = ha_jugado_hoy
     else:
         usuarios = []
@@ -231,12 +215,10 @@ def jugar():
 
     fecha_activa = obtener_fecha_juego_actual()
     
-    # Comprobación de seguridad: Si ya jugó el tablero activo, le expulsamos
     if current_user.ultimo_juego_fecha == fecha_activa:
         flash("Ya has participado en el reto activo. ¡Vuelve cuando se abra el siguiente!", "error")
         return redirect(url_for('index'))
 
-    # Carga de la partida utilizando la fecha activa
     jugadores_hoy, conexiones_hoy = obtener_juego_del_dia(fecha_activa)
 
     random.seed()
@@ -249,7 +231,6 @@ def compartieron_club(carrera1, carrera2):
     for club1, entrada1, salida1 in carrera1:
         for club2, entrada2, salida2 in carrera2:
             if club1 == club2:
-                # Comprobar solapamiento de años en el mismo club
                 inicio_comun = max(entrada1, entrada2)
                 fin_comun = min(salida1, salida2)
                 if inicio_comun <= fin_comun:
@@ -275,8 +256,9 @@ def guardar_puntuacion():
     if completado:
         puntos_obtenidos = max(100, 1000 - segundos) 
         current_user.puntos_temporada += puntos_obtenidos
-        # Guardamos la fecha del tablero que acaba de completar como su fecha de último juego
         current_user.ultimo_juego_fecha = fecha_activa
+        # INCREMENTAR PARTIDAS JUGADAS
+        current_user.partidas_jugadas += 1
         db.session.commit()
         
         flash(f"¡Reto completado en {segundos} segundos! Sumas {puntos_obtenidos} puntos.", "success")
@@ -315,7 +297,9 @@ def reset_clasificacion():
     usuarios = User.query.all()
     for usuario in usuarios:
         usuario.puntos_temporada = 0
-        usuario.ultimo_juego_fecha = None  # Permitir volver a jugar a todos tras el reset
+        usuario.ultimo_juego_fecha = None
+        # RESETEAR PARTIDAS JUGADAS
+        usuario.partidas_jugadas = 0
     db.session.commit()
     flash("La clasificación general ha sido reiniciada a 0.", "success")
     return redirect(url_for('index'))

@@ -49,9 +49,12 @@
                 <div class="py-3 flex justify-between items-center">
                     <div class="flex items-center gap-3">
                         <span class="font-bold text-gray-500 text-sm">#{{ loop.index }}</span>
-                        <span class="font-semibold text-gray-800">{{ usuario.username }}</span>
+                        <div>
+                            <span class="font-semibold text-gray-800 block text-sm">{{ usuario.username }}</span>
+                            <span class="text-[10px] text-gray-400 block">{{ usuario.partidas_jugadas }} partidas</span>
+                        </div>
                     </div>
-                    <span class="font-bold text-emerald-600">{{ usuario.puntos_temporada }} pts</span>
+                    <span class="font-bold text-emerald-600 text-sm">{{ usuario.puntos_temporada }} pts</span>
                 </div>
             {% else %}
                 <p class="text-xs text-gray-500 text-center py-4">No hay jugadores registrados en este grupo todavía.</p>
@@ -74,7 +77,7 @@
                         <div>
                             <span class="font-semibold text-gray-800 text-sm block">{{ usuario.username }}</span>
                             <span class="text-[11px] text-gray-500">
-                                Grupo: <strong class="text-gray-700">{{ usuario.grupo.nombre if usuario.grupo else 'Ninguno' }}</strong> | {{ usuario.puntos_temporada }} pts
+                                Grupo: <strong class="text-gray-700">{{ usuario.grupo.nombre if usuario.grupo else 'Ninguno' }}</strong> | {{ usuario.puntos_temporada }} pts ({{ usuario.partidas_jugadas }} partidas)
                             </span>
                         </div>
                         <form action="{{ url_for('borrar_usuario', user_id=usuario.id) }}" method="POST" onsubmit="return confirm('¿Estás seguro de que deseas eliminar al usuario {{ usuario.username }}?');" style="margin: 0;">
@@ -135,7 +138,7 @@
         const segundos = Math.floor((diferencia % (1000 * 60)) / 1000);
         
         const hDisplay = horas.toString().padStart(2, '0');
-        const mDisplay = minutos.toString().padStart(2, '0');
+        const mDisplay = minutes.toString().padStart(2, '0');
         const sDisplay = segundos.toString().padStart(2, '0');
         
         document.getElementById('cronometro-espera').innerText = `${hDisplay}h ${mDisplay}m ${sDisplay}s`;
