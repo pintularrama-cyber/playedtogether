@@ -53,7 +53,6 @@ def load_user(user_id):
 # --- BASE DE DATOS ESTADÍSTICA DE TRAYECTORIAS Y MÉTRICAS (64 JUGADORES) ---
 
 JUGADORES_DB = {
-    # Real Madrid / Barcelona / PSG
     "Messi": {
         "carrera": [("Barcelona", 2004, 2021), ("PSG", 2021, 2023), ("Inter Miami", 2023, 2026)],
         "goles": 835, "asistencias": 372, "tarjetas": 15, "partidos": 1062
@@ -360,7 +359,6 @@ def actualizar_y_obtener_temporada():
 
 def obtener_tipo_juego_hoy(fecha_juego):
     """Alterna el juego: días pares 'grid' (Cuadrícula), días impares 'ordenar'."""
-    # toordinal() da un número único para cada día de la historia de la humanidad
     return "grid" if fecha_juego.toordinal() % 2 == 0 else "ordenar"
 
 
@@ -411,7 +409,6 @@ def obtener_juego_del_dia(fecha_juego):
             random.shuffle(posibles_companeros)
             
             for p2 in posibles_companeros:
-                # Comparamos la clave de carrera interna
                 if compartieron_club(JUGADORES_DB[p1]["carrera"], JUGADORES_DB[p2]["carrera"]):
                     parejas_seleccionadas.append((p1, p2))
                     jugadores_seleccionados.add(p1)
@@ -445,15 +442,12 @@ def obtener_juego_ordenar(fecha_juego):
     semilla = int(hoy_str)
     random.seed(semilla)
     
-    # 1. Elegimos 10 jugadores aleatorios estables para hoy
     pool_jugadores = list(JUGADORES_DB.keys())
     jugadores_hoy = random.sample(pool_jugadores, 10)
     
-    # 2. Elegimos la métrica al azar para hoy
     metricas = ["goles", "asistencias", "tarjetas", "partidos"]
     metrica_seleccionada = random.choice(metricas)
     
-    # Mapeo para mostrar nombres bonitos en el HTML
     titulos_metrica = {
         "goles": "Goles en su Carrera ⚽",
         "asistencias": "Asistencias de Gol 🎯",
@@ -462,10 +456,8 @@ def obtener_juego_ordenar(fecha_juego):
     }
     titulo_bonito = titulos_metrica[metrica_seleccionada]
     
-    # 3. Solución correcta ordenada de MAYOR a MENOR basándose en la métrica
     solucion_ordenada = sorted(jugadores_hoy, key=lambda p: JUGADORES_DB[p][metrica_seleccionada], reverse=True)
     
-    # 4. Mezclamos los jugadores para mostrárselos desordenados al usuario
     random.seed()
     jugadores_desordenados = list(jugadores_hoy)
     random.shuffle(jugadores_desordenados)
@@ -527,21 +519,16 @@ def jugar():
         flash("Ya has participado en el reto activo. ¡Vuelve mañana!", "error")
         return redirect(url_for('index'))
 
-    # Determinar qué minijuego toca hoy según alternancia diaria
     tipo_juego = obtener_tipo_juego_hoy(fecha_activa)
 
     if tipo_juego == "grid":
-        # JUEGO 1: Cuadrícula de parejas
         jugadores_hoy, conexiones_hoy = obtener_juego_del_dia(fecha_activa)
         random.seed()
         jugadores_mezclados = list(jugadores_hoy)
         random.shuffle(jugadores_mezclados)
         return render_template('jugar.html', jugadores=jugadores_mezclados, conexiones=conexiones_hoy)
     else:
-        # JUEGO 2: Ordenar jugadores
         jugadores_desordenados, titulo_bonito, solucion_ordenada, metrica = obtener_juego_ordenar(fecha_activa)
-        
-        # Guardamos en un diccionario el valor real de cada jugador para que JS pueda consultarlo si falla o acierta
         valores_reales = {p: JUGADORES_DB[p][metrica] for p in jugadores_desordenados}
         
         return render_template(
@@ -553,11 +540,51 @@ def jugar():
         )
 
 
+# --- ADMIN: PROBAR JUEGO 1 (CUADRÍCULA) ---
+@app.route('/admin/test_grid')
+@login_required
+def test_grid():
+    if current_user.username != 'admin':
+        flash("Acceso denegado.", "error")
+        return redirect(url_for('index'))
+    
+    fecha_activa = obtener_fecha_juego_actual()
+    jugadores_hoy, conexiones_hoy = obtener_juego_del_dia(fecha_activa)
+    
+    random.seed()
+    jugadores_mezclados = list(jugadores_hoy)
+    random.shuffle(jugadores_mezclados)
+    
+    return render_template('jugar.html', jugadores=jugadores_mezclados, conexiones=conexiones_hoy)
+
+
+# --- ADMIN: PROBAR JUEGO 2 (ORDENAR) ---
+@app.route('/admin/test_ordenar')
+@login_required
+def test_ordenar():
+    if current_user.username != 'admin':
+        flash("Acceso denegado.", "error")
+        return redirect(url_for('index'))
+    
+    fecha_activa = obtener_fecha_juego_actual()
+    jugadores_desordenados, titulo_bonito, solucion_ordenada, metrica = obtener_juego_ordenar(fecha_activa)
+    valores_reales = {p: JUGADORES_DB[p][metrica] for p in jugadores_desordenados}
+    
+    return render_template(
+        'ordenar.html', 
+        jugadores=jugadores_desordenados, 
+        titulo_bonito=titulo_bonito, 
+        solucion=solucion_ordenada,
+        valores_reales=valores_reales
+    )
+
+
 @app.route('/guardar_puntuacion', methods=['POST'])
 @login_required
 def guardar_puntuacion():
+    # Si es el admin probando los test, respondemos OK de forma ficticia para que no dé error visual
     if current_user.username == 'admin':
-        return jsonify({"status": "error", "message": "El admin no puntúa"}), 400
+        return jsonify({"status": "ok", "message": "Simulacion de test completada"}), 200
 
     fecha_activa = obtener_fecha_juego_actual()
     
@@ -567,11 +594,9 @@ def guardar_puntuacion():
     datos = request.get_json()
     segundos = datos.get('segundos', 9999)
     completado = datos.get('completado', False)
-    puntos_enviados = datos.get('puntos')  # Capturamos los puntos de precisión si existen
+    puntos_enviados = datos.get('puntos')  # Capturamos puntos específicos si existen
 
     if completado:
-        # Si el juego de ordenar envía los puntos calculados por error, los usamos.
-        # Si no, calculamos por tiempo (juego de cuadrícula).
         if puntos_enviados is not None:
             puntos_obtenidos = puntos_enviados
         else:

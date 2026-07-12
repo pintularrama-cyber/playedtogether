@@ -101,6 +101,20 @@
     <!-- PANEL EXCLUSIVO PARA EL ADMINISTRADOR -->
     {% if current_user.username == 'admin' %}
         
+        <!-- NUEVO: PROBAR AMBOS MINIJUEGOS EN VIVO -->
+        <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 space-y-4">
+            <h3 class="text-lg font-bold text-gray-800">🛠️ Probar Minijuegos Activos</h3>
+            <p class="text-xs text-gray-500">Prueba los dos juegos de hoy en vivo sin guardar puntuación.</p>
+            <div class="flex flex-col gap-2">
+                <a href="{{ url_for('test_grid') }}" class="block text-center w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow transition duration-200">
+                    Probar Parejas (Cuadrícula) ⚽
+                </a>
+                <a href="{{ url_for('test_ordenar') }}" class="block text-center w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-lg shadow transition duration-200">
+                    Probar Ordenación (Estadísticas) 📊
+                </a>
+            </div>
+        </div>
+
         <!-- GESTIÓN DE USUARIOS -->
         <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200">
             <h3 class="text-lg font-bold text-gray-800 mb-4 flex items-center gap-2">
@@ -161,28 +175,20 @@
         const contentGeneral = document.getElementById('contenido-general');
 
         if (tipo === 'temporada') {
-            // Activar botón temporada
             tabTemporada.className = "flex-1 text-center text-xs font-bold py-2 rounded-md transition duration-150 bg-white text-emerald-600 shadow";
-            // Desactivar botón general
             tabGeneral.className = "flex-1 text-center text-xs font-bold py-2 rounded-md transition duration-150 text-gray-500 hover:text-gray-800";
-            
-            // Mostrar contenido temporada, ocultar general
             contentTemporada.classList.replace('hidden', 'block');
             contentGeneral.classList.replace('block', 'hidden');
         } else {
-            // Activar botón general
             tabGeneral.className = "flex-1 text-center text-xs font-bold py-2 rounded-md transition duration-150 bg-white text-emerald-600 shadow";
-            // Desactivar botón temporada
             tabTemporada.className = "flex-1 text-center text-xs font-bold py-2 rounded-md transition duration-150 text-gray-500 hover:text-gray-800";
-            
-            // Mostrar contenido general, ocultar temporada
             contentGeneral.classList.replace('hidden', 'block');
             contentTemporada.classList.replace('block', 'hidden');
         }
     }
 </script>
 
-<!-- SCRIPT DEL CRONÓMETRO DE ESPERA (CORREGIDO) -->
+<!-- SCRIPT DEL CRONÓMETRO DE ESPERA -->
 {% if bloqueado_hora %}
 <script>
     function actualizarCronometro() {
@@ -190,7 +196,6 @@
         const destino = new Date();
         destino.setHours(11, 0, 0, 0);
         
-        // CORRECCIÓN: Si ya pasaron las 11:00 AM de hoy, el siguiente reto se abre mañana a las 11:00 AM
         if (ahora > destino) {
             destino.setDate(destino.getDate() + 1);
         }
