@@ -52,6 +52,7 @@
         }, 1000);
     }
 
+    // Iniciar cronómetro por primera vez al cargar el tablero
     iniciarCronometro();
 
     function seleccionarCarta(boton) {
@@ -59,11 +60,8 @@
         // CASO 1: Si el usuario pulsa sobre una carta que ya está en VERDE (completada)
         if (boton.hasAttribute('data-pair-id')) {
             const idPareja = boton.getAttribute('data-pair-id');
-            
-            // Buscamos los dos botones que comparten esta misma ID de pareja
             const cartasDeLaPareja = document.querySelectorAll(`[data-pair-id="${idPareja}"]`);
             
-            // Los restauramos a su estado original blanco y activo
             cartasDeLaPareja.forEach(btn => {
                 btn.classList.remove('bg-green-500', 'text-white');
                 btn.classList.add('bg-white', 'text-gray-800');
@@ -72,13 +70,12 @@
             
             parejasCompletadas--;
             
-            // Si había otra carta blanca seleccionada a medias, la limpiamos para evitar fallos
             if (cartaSeleccionada) {
                 cartaSeleccionada.classList.remove('bg-blue-200');
                 cartaSeleccionada.classList.add('bg-white');
                 cartaSeleccionada = null;
             }
-            return; // Salimos de la función
+            return;
         }
 
         // CASO 2: Lógica normal de selección para cartas blancas
@@ -111,7 +108,6 @@
         );
     }
 
-    // Al emparejar con éxito, generamos una ID única de pareja
     function marcarCorrectas(btn1, btn2) {
         const idParejaUnique = 'pareja-' + Math.random().toString(36).substr(2, 9);
         
@@ -119,7 +115,6 @@
             btn.classList.remove('bg-blue-200', 'bg-white');
             btn.classList.add('bg-green-500', 'text-white');
             btn.setAttribute('data-pair-id', idParejaUnique);
-            // IMPORTANTE: Ya no usamos btn.disabled = true para permitir que detecten el clic para deshacerse
         });
     }
 
@@ -137,16 +132,16 @@
         }, 500);
     }
 
+    // ELIMINADO EL REINICIO DE TIEMPO (Solo limpia el tablero de juego)
     function reiniciarTablero() {
         const cartas = document.querySelectorAll('.carta');
         cartas.forEach(btn => {
             btn.classList.remove('bg-green-500', 'text-white', 'bg-blue-200', 'bg-red-500');
-            btn.classList.add('bg-white');
+            btn.classList.add('bg-white', 'text-gray-800');
             btn.removeAttribute('data-pair-id');
         });
         cartaSeleccionada = null;
         parejasCompletadas = 0;
-        iniciarCronometro();
     }
 
     function finalizarJuego() {
