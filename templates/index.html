@@ -101,16 +101,19 @@
     <!-- PANEL EXCLUSIVO PARA EL ADMINISTRADOR -->
     {% if current_user.username == 'admin' %}
         
-        <!-- NUEVO: PROBAR AMBOS MINIJUEGOS EN VIVO -->
+        <!-- PROBAR LOS 3 MINIJUEGOS EN VIVO -->
         <div class="bg-white p-6 rounded-lg shadow-md border border-gray-200 space-y-4">
             <h3 class="text-lg font-bold text-gray-800">🛠️ Probar Minijuegos Activos</h3>
-            <p class="text-xs text-gray-500">Prueba los dos juegos de hoy en vivo sin guardar puntuación.</p>
+            <p class="text-xs text-gray-500">Prueba los tres juegos del ciclo en vivo sin registrar puntos.</p>
             <div class="flex flex-col gap-2">
                 <a href="{{ url_for('test_grid') }}" class="block text-center w-full bg-emerald-600 hover:bg-emerald-700 text-white font-bold py-3 rounded-lg shadow transition duration-200">
                     Probar Parejas (Cuadrícula) ⚽
                 </a>
                 <a href="{{ url_for('test_ordenar') }}" class="block text-center w-full bg-amber-500 hover:bg-amber-600 text-white font-bold py-3 rounded-lg shadow transition duration-200">
                     Probar Ordenación (Estadísticas) 📊
+                </a>
+                <a href="{{ url_for('test_trayectoria') }}" class="block text-center w-full bg-blue-600 hover:bg-blue-700 text-white font-bold py-3 rounded-lg shadow transition duration-200">
+                    Probar Trayectoria (Línea de tiempo) ⏱️
                 </a>
             </div>
         </div>

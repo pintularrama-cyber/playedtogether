@@ -51,11 +51,8 @@ def load_user(user_id):
 
 
 # --- BASE DE DATOS ESTADÍSTICA DE TRAYECTORIAS Y MÉTRICAS (64 JUGADORES) ---
-# Métricas incluidas: goles, asistencias, tarjetas (amarillas), partidos (clubes),
-# europa (competición europea de clubes), mundial (partidos en copas del mundo), internacional (partidos selección)
 
 JUGADORES_DB = {
-    # Real Madrid / Barcelona / PSG
     "Messi": {
         "carrera": [("Barcelona", 2004, 2021), ("PSG", 2021, 2023), ("Inter Miami", 2023, 2026)],
         "goles": 835, "asistencias": 372, "tarjetas": 15, "partidos": 1062, "europa": 149, "mundial": 26, "internacional": 180
@@ -323,6 +320,10 @@ JUGADORES_DB = {
 }
 
 
+# --- OBTENER LISTA ÚNICA DE TODOS LOS CLUBES DEL JUEGO ---
+ALL_CLUBS = list(set([club for p in JUGADORES_DB.values() for club, _, _ in p["carrera"]]))
+
+
 # --- CONTROL DE TEMPORADAS AUTOMÁTICAS (20 DÍAS) ---
 
 def actualizar_y_obtener_temporada():
@@ -358,11 +359,17 @@ def actualizar_y_obtener_temporada():
     return temporada_activa.numero, dias_restantes
 
 
-# --- CONTROL DE ALTERNANCIA DIARIA ---
+# --- CONTROL DE ALTERNANCIA DIARIA DE 3 DÍAS ---
 
 def obtener_tipo_juego_hoy(fecha_juego):
-    """Alterna el juego: días pares 'grid' (Cuadrícula), días impares 'ordenar'."""
-    return "grid" if fecha_juego.toordinal() % 2 == 0 else "ordenar"
+    """Alterna cíclicamente: Día 0 'grid', Día 1 'ordenar', Día 2 'trayectoria'."""
+    modulo = fecha_juego.toordinal() % 3
+    if modulo == 0:
+        return "grid"
+    elif modulo == 1:
+        return "ordenar"
+    else:
+        return "trayectoria"
 
 
 # --- LÓGICA DE CONTROL DE CICLO DIARIO (11:00 AM) ---
@@ -439,21 +446,18 @@ def obtener_juego_del_dia(fecha_juego):
     return jugadores_hoy, conexiones_hoy
 
 
-# --- GENERADOR JUEGO 2: ORDENAR (AJUSTADO A 5 JUGADORES Y NUEVAS MÉTRICAS) ---
+# --- GENERADOR JUEGO 2: ORDENAR (TOP 5) ---
 def obtener_juego_ordenar(fecha_juego):
     hoy_str = fecha_juego.strftime('%Y%m%d')
     semilla = int(hoy_str)
     random.seed(semilla)
     
-    # 1. Ajustado: Elegimos 5 jugadores aleatorios estables para hoy
     pool_jugadores = list(JUGADORES_DB.keys())
     jugadores_hoy = random.sample(pool_jugadores, 5)
     
-    # 2. Elegimos la métrica al azar para hoy (incluidas las nuevas)
     metricas = ["goles", "asistencias", "tarjetas", "partidos", "europa", "mundial", "internacional"]
     metrica_seleccionada = random.choice(metricas)
     
-    # Mapeo con los títulos bonitos en el HTML
     titulos_metrica = {
         "goles": "Goles en su Carrera ⚽",
         "asistencias": "Asistencias de Gol 🎯",
@@ -465,15 +469,53 @@ def obtener_juego_ordenar(fecha_juego):
     }
     titulo_bonito = titulos_metrica[metrica_seleccionada]
     
-    # 3. Solución correcta ordenada de MAYOR a MENOR basándose en la métrica
     solucion_ordenada = sorted(jugadores_hoy, key=lambda p: JUGADORES_DB[p][metrica_seleccionada], reverse=True)
     
-    # 4. Mezclamos los jugadores para mostrárselos desordenados al usuario
     random.seed()
     jugadores_desordenados = list(jugadores_hoy)
     random.shuffle(jugadores_desordenados)
     
     return jugadores_desordenados, titulo_bonito, solucion_ordenada, metrica_seleccionada
+
+
+# --- GENERADOR JUEGO 3: TRAYECTORIA (NUEVO JUEGO DE 3 RONDAS) ---
+def obtener_juego_trayectoria(fecha_juego):
+    hoy_str = fecha_juego.strftime('%Y%m%d')
+    semilla = int(hoy_str)
+    random.seed(semilla)
+    
+    pool_jugadores = list(JUGADORES_DB.keys())
+    # Seleccionamos 3 jugadores estables para las 3 rondas consecutivas de hoy
+    jugadores_rondas = random.sample(pool_jugadores, 3)
+    
+    rondas_data = []
+    for index, jugador in enumerate(jugadores_rondas):
+        # 1. Obtener la trayectoria de clubes reales en orden cronológico único
+        clubes_reales = []
+        for club, _, _ in JUGADORES_DB[jugador]["carrera"]:
+            if club not in clubes_reales:
+                clubes_reales.append(club)
+        
+        # 2. Generar clubes intrusos (en los que nunca ha jugado de nuestra DB)
+        clubes_intrusos = [c for c in ALL_CLUBS if c not in clubes_reales]
+        num_intrusos = 9 - len(clubes_reales)
+        
+        # Mezclamos los intrusos de forma estable
+        random.seed(semilla + index + len(clubes_reales))
+        intrusos_seleccionados = random.sample(clubes_intrusos, num_intrusos)
+        
+        # 3. Cuadrícula 3x3 mezclada
+        cuadricula_9 = clubes_reales + intrusos_seleccionados
+        random.shuffle(cuadricula_9)
+        
+        rondas_data.append({
+            "jugador": jugador,
+            "cuadricula": cuadricula_9,
+            "solucion": clubes_reales,  # El orden correcto de clics es la lista real cronológica
+            "pista_num": len(clubes_reales)
+        })
+        
+    return rondas_data
 
 
 # --- RUTAS ---
@@ -530,6 +572,7 @@ def jugar():
         flash("Ya has participado en el reto activo. ¡Vuelve mañana!", "error")
         return redirect(url_for('index'))
 
+    # Determinar qué minijuego toca hoy (Secuencia cíclica de 3 días)
     tipo_juego = obtener_tipo_juego_hoy(fecha_activa)
 
     if tipo_juego == "grid":
@@ -538,10 +581,9 @@ def jugar():
         jugadores_mezclados = list(jugadores_hoy)
         random.shuffle(jugadores_mezclados)
         return render_template('jugar.html', jugadores=jugadores_mezclados, conexiones=conexiones_hoy)
-    else:
+    elif tipo_juego == "ordenar":
         jugadores_desordenados, titulo_bonito, solucion_ordenada, metrica = obtener_juego_ordenar(fecha_activa)
         valores_reales = {p: JUGADORES_DB[p][metrica] for p in jugadores_desordenados}
-        
         return render_template(
             'ordenar.html', 
             jugadores=jugadores_desordenados, 
@@ -549,6 +591,10 @@ def jugar():
             solucion=solucion_ordenada,
             valores_reales=valores_reales
         )
+    else:
+        # NUEVO JUEGO 3: Trayectoria cronológica
+        rondas_data = obtener_juego_trayectoria(fecha_activa)
+        return render_template('trayectoria.html', rondas_data=rondas_data)
 
 
 # --- ADMIN: PROBAR JUEGO 1 (CUADRÍCULA) ---
@@ -561,11 +607,9 @@ def test_grid():
     
     fecha_activa = obtener_fecha_juego_actual()
     jugadores_hoy, conexiones_hoy = obtener_juego_del_dia(fecha_activa)
-    
     random.seed()
     jugadores_mezclados = list(jugadores_hoy)
     random.shuffle(jugadores_mezclados)
-    
     return render_template('jugar.html', jugadores=jugadores_mezclados, conexiones=conexiones_hoy)
 
 
@@ -580,7 +624,6 @@ def test_ordenar():
     fecha_activa = obtener_fecha_juego_actual()
     jugadores_desordenados, titulo_bonito, solucion_ordenada, metrica = obtener_juego_ordenar(fecha_activa)
     valores_reales = {p: JUGADORES_DB[p][metrica] for p in jugadores_desordenados}
-    
     return render_template(
         'ordenar.html', 
         jugadores=jugadores_desordenados, 
@@ -588,6 +631,19 @@ def test_ordenar():
         solucion=solucion_ordenada,
         valores_reales=valores_reales
     )
+
+
+# --- ADMIN: PROBAR JUEGO 3 (TRAYECTORIA) ---
+@app.route('/admin/test_trayectoria')
+@login_required
+def test_trayectoria():
+    if current_user.username != 'admin':
+        flash("Acceso denegado.", "error")
+        return redirect(url_for('index'))
+    
+    fecha_activa = obtener_fecha_juego_actual()
+    rondas_data = obtener_juego_trayectoria(fecha_activa)
+    return render_template('trayectoria.html', rondas_data=rondas_data)
 
 
 @app.route('/guardar_puntuacion', methods=['POST'])
